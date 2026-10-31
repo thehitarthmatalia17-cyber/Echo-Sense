@@ -18,6 +18,7 @@ import { EarSelectionScreen } from './components/EarSelectionScreen';
 
 // Pages
 import { LandingPage } from './pages/LandingPage';
+import { HearingTestsPage } from './pages/HearingTestsPage';
 import { RegistrationPage } from './pages/RegistrationPage';
 import { TestRepetitionPage } from './pages/TestRepetitionPage';
 import { TestMisheardPage } from './pages/TestMisheardPage';
@@ -40,6 +41,9 @@ export function App() {
 
   // Ear Testing Mode ('left' | 'right' | 'both')
   const [testedEarMode, setTestedEarMode] = useState<EarMode>('both');
+
+  // Track if user launched a standalone test vs full sequence
+  const [activeStandaloneTest, setActiveStandaloneTest] = useState<'test1' | 'test2' | 'test3' | 'ear_assessment' | null>(null);
 
   // Test Summaries
   const [test1Summary, setTest1Summary] = useState<RepetitionTestSummary | null>(null);
@@ -74,22 +78,93 @@ export function App() {
     }
   };
 
-  // Launch assessment from Landing Page
+  // Launch assessment from Landing Page -> Directs to the dedicated 4-Test Selection Page
   const handleStartAssessment = () => {
-    setActiveTab('screening');
-    if (!userProfile) {
-      setScreeningStep(1); // Step 1: Registration
-    } else {
-      setScreeningStep(2); // Step 2: Ear Selection
+    setActiveTab('tests');
+  };
+
+  // Launch a specific test chosen from the 4 options on the Hearing Tests Selection Page
+  const handleLaunchSpecificTest = (
+    testType: 'test1' | 'test2' | 'test3' | 'ear_assessment' | 'full_sequence',
+    earMode?: EarMode
+  ) => {
+    if (testType === 'full_sequence') {
+      setActiveStandaloneTest(null);
+      setTestedEarMode('both');
+      setActiveTab('screening');
+      if (!userProfile) {
+        setScreeningStep(1); // Step 1: Registration
+      } else {
+        setScreeningStep(2); // Step 2: Ear Selection Screen
+      }
+      return;
+    }
+
+    if (testType === 'ear_assessment') {
+      const ear = earMode || 'left';
+      setTestedEarMode(ear);
+      setActiveStandaloneTest('ear_assessment');
+      setActiveTab('screening');
+      if (!userProfile) {
+        setScreeningStep(1); // Registration
+      } else {
+        setScreeningStep(5); // Jump directly to Pure Tone Frequency Test with unilateral audio panning + pink noise masking
+      }
+      return;
+    }
+
+    if (testType === 'test3') {
+      setTestedEarMode('both');
+      setActiveStandaloneTest('test3');
+      setActiveTab('screening');
+      if (!userProfile) {
+        setScreeningStep(1);
+      } else {
+        setScreeningStep(5); // Jump directly to Pure Tone Test
+      }
+      return;
+    }
+
+    if (testType === 'test2') {
+      setTestedEarMode('both');
+      setActiveStandaloneTest('test2');
+      setActiveTab('screening');
+      if (!userProfile) {
+        setScreeningStep(1);
+      } else {
+        setScreeningStep(4); // Jump directly to Word Contrast Test
+      }
+      return;
+    }
+
+    if (testType === 'test1') {
+      setTestedEarMode('both');
+      setActiveStandaloneTest('test1');
+      setActiveTab('screening');
+      if (!userProfile) {
+        setScreeningStep(1);
+      } else {
+        setScreeningStep(3); // Jump directly to Repetition Test
+      }
+      return;
     }
   };
 
-  // Step 1 Complete: User Registration -> Advance to Ear Selection
+  // Step 1 Complete: User Registration -> Advance to selected test or ear selection
   const handleRegistrationComplete = async (profile: UserProfile) => {
     const registered = await api.registerUser(profile);
     setUserProfile(registered);
     setCurrentLanguage(registered.preferredLanguage);
-    setScreeningStep(2); // Step 2: Ear Selection Screen
+
+    if (activeStandaloneTest === 'ear_assessment' || activeStandaloneTest === 'test3') {
+      setScreeningStep(5); // Pure Tone Frequency Test
+    } else if (activeStandaloneTest === 'test2') {
+      setScreeningStep(4); // Word Contrast Test
+    } else if (activeStandaloneTest === 'test1') {
+      setScreeningStep(3); // Repetition Test
+    } else {
+      setScreeningStep(2); // Step 2: Ear Selection Screen for full sequence
+    }
   };
 
   // Step 2 Complete: Ear Selected -> Advance to Test 1
@@ -137,21 +212,39 @@ export function App() {
       frequenciesTested: [250, 500, 1000, 2000, 4000, 6000, 8000, 12000],
     } : undefined;
 
-    if (userProfile && test1Summary && test2Summary) {
-      try {
-        const report = await api.submitScreening(
-          userProfile.id || 'default-user',
-          test1Summary,
-          test2Summary,
-          summary,
-          testedEarMode,
-          leftEarResult,
-          rightEarResult
-        );
-        setScreeningReport(report);
-      } catch (err) {
-        console.warn("Failed to submit screening report:", err);
-      }
+    const repSummary: RepetitionTestSummary = test1Summary || {
+      totalQuestions: 4,
+      correctAnswers: 4,
+      incorrectAnswers: 0,
+      totalRepetitions: 0,
+      accuracyPercentage: 100.0,
+      stageBreakdown: [],
+    };
+
+    const mishSummary: MisheardTestSummary = test2Summary || {
+      totalWords: 5,
+      correctlyRecognized: ['Ship', 'Van', 'Thin', 'Pat'],
+      incorrectlyRecognized: ['Cab'],
+      totalAttempts: 5,
+      accuracyPercentage: 80.0,
+      categoryPerformance: {},
+      beneficialAssessmentAreas: ['Voiced vs Voiceless Consonants'],
+    };
+
+    const targetUserId = userProfile?.id || 'anonymous-user';
+    try {
+      const report = await api.submitScreening(
+        targetUserId,
+        repSummary,
+        mishSummary,
+        summary,
+        testedEarMode,
+        leftEarResult,
+        rightEarResult
+      );
+      setScreeningReport(report);
+    } catch (err) {
+      console.warn("Failed to submit screening report:", err);
     }
     setScreeningStep(6); // Show Final Comprehensive Results Page
   };
@@ -236,6 +329,15 @@ export function App() {
           />
         )}
 
+        {/* Hearing Tests Selection Page (4 Available Testing Options) */}
+        {activeTab === 'tests' && (
+          <HearingTestsPage
+            currentLanguage={currentLanguage}
+            userProfile={userProfile}
+            onLaunchTest={handleLaunchSpecificTest}
+          />
+        )}
+
         {/* Screening Assessment Flow */}
         {activeTab === 'screening' && (
           <div className="pt-6 sm:pt-8">
@@ -299,7 +401,7 @@ export function App() {
                   report={
                     screeningReport || {
                       id: 'temp-report',
-                      testId: `TW-${Date.now().toString(36).toUpperCase()}`,
+                      testId: `ES-${Date.now().toString(36).toUpperCase()}`,
                       userId: userProfile?.id || 'default-user',
                       userName: userProfile?.fullName || 'User',
                       age: userProfile?.age || 35,
@@ -359,9 +461,9 @@ export function App() {
                       concernReason:
                         'No significant concern identified during this screening session. Your responses were consistent across the tested speech bands and frequency ranges.',
                       disclaimer:
-                        'These tests are experimental and are not medically validated diagnostic procedures. TunnelWay only provides preliminary hearing-related screening observations.',
+                        'These tests are experimental and are not medically validated diagnostic procedures. EchoSense only provides preliminary hearing-related screening observations.',
                       thankYouMessage:
-                        'Thank you for choosing TunnelWay. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
+                        'Thank you for choosing EchoSense. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
                     }
                   }
                   currentLanguage={currentLanguage}
@@ -402,14 +504,7 @@ export function App() {
           <HistoryPage
             currentLanguage={currentLanguage}
             userProfile={userProfile}
-            onStartNewTest={() => {
-              setActiveTab('screening');
-              if (userProfile) {
-                setScreeningStep(2); // Jump directly to ear selection
-              } else {
-                setScreeningStep(1);
-              }
-            }}
+            onStartNewTest={() => setActiveTab('tests')}
           />
         )}
 

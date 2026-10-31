@@ -11,7 +11,8 @@ import {
   Menu,
   X,
   ChevronDown,
-  Clock
+  Clock,
+  Layers
 } from 'lucide-react';
 import { LanguageCode } from '../types';
 import { languages, translations } from '../i18n/translations';
@@ -40,13 +41,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems = [
     {
       id: 'landing',
-      label: 'OVERVIEW',
+      label: 'HOME',
       icon: Compass,
     },
     {
-      id: 'screening',
-      label: t.nav.screening.toUpperCase(),
-      icon: Activity,
+      id: 'tests',
+      label: 'HEARING TESTS',
+      icon: Layers,
     },
     {
       id: 'history',

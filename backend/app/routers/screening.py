@@ -134,7 +134,7 @@ def submit_screening(payload: CompleteScreeningSubmission):
     }
 
     screening_id = db.save_screening(screening_record)
-    generated_test_id = payload.test_id or f"TW-{screening_id[:8].upper()}"
+    generated_test_id = payload.test_id or f"ES-{screening_id[:8].upper()}"
 
     return ScreeningReport(
         id=screening_id,

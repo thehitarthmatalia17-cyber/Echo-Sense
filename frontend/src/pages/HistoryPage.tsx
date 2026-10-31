@@ -100,13 +100,13 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
         <div>
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-md bg-[#FFC700] border-2 border-black shadow-brutal-xs text-xs font-black uppercase tracking-wider mb-3">
             <Clock className="w-3.5 h-3.5" />
-            <span>USER TEST ARCHIVE • FIFO STORAGE</span>
+            <span>MY TEST DASHBOARD • FIFO PERSISTENT STORAGE</span>
           </div>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-black tracking-tight uppercase">
-            Hearing Test History
+            My Test History
           </h1>
           <p className="mt-2 text-base text-slate-700 font-bold max-w-2xl">
-            Access your private, historical hearing screening records. Your last 10 test sessions are automatically preserved with independent left and right ear evaluations.
+            Access your private, historical hearing screening records. Your latest 10 completed test sessions are preserved with full details, Left & Right ear results, and PDF downloads.
           </p>
         </div>
 
@@ -146,17 +146,17 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-black uppercase tracking-tight mb-3">
-            No hearing tests recorded yet
+            No hearing tests recorded yet.
           </h2>
           <p className="text-slate-700 font-bold text-base sm:text-lg mb-8 max-w-lg mx-auto">
-            Your completed tests will appear here. Conduct a Left Ear, Right Ear, or Bilateral hearing assessment to generate your first detailed medical report.
+            Your completed tests will appear here. Conduct any of the four hearing tests to generate your screening record and download medical reports.
           </p>
 
           <button
             onClick={onStartNewTest}
-            className="w-full sm:w-auto inline-flex items-center justify-center space-x-3 px-8 py-4 bg-[#FFC700] hover:bg-[#E5B200] text-black font-black text-base uppercase tracking-wider border-3 border-black shadow-brutal hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-brutal-sm transition-all rounded-xl"
+            className="w-full sm:w-auto inline-flex items-center justify-center space-x-3 px-8 py-4 bg-[#FFC700] hover:bg-[#E5B200] text-black font-black text-base uppercase tracking-wider border-3 border-black shadow-brutal hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-brutal-sm transition-all rounded-xl cursor-pointer"
           >
-            <span>START HEARING ASSESSMENT</span>
+            <span>EXPLORE HEARING TESTS</span>
             <ArrowRight className="w-5 h-5 stroke-[2.5]" />
           </button>
 
@@ -237,11 +237,26 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         <span>{badge.label}</span>
                       </span>
 
+                      {/* Status */}
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-950 font-black text-xs border-2 border-black flex items-center space-x-1">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        <span>COMPLETED</span>
+                      </span>
+
                       {/* Timestamp */}
                       <span className="text-xs font-bold text-slate-500 flex items-center space-x-1 ml-auto lg:ml-0">
                         <Calendar className="w-3.5 h-3.5" />
                         <span>{dateStr} at {timeStr}</span>
                       </span>
+                    </div>
+
+                    {/* Test Name Title */}
+                    <div className="mt-2 mb-1">
+                      <h3 className="text-base sm:text-lg font-black uppercase text-black">
+                        {testedEar === 'left' ? 'Left Ear Unilateral Assessment' :
+                         testedEar === 'right' ? 'Right Ear Unilateral Assessment' :
+                         'Comprehensive Bilateral Auditory Screening'}
+                      </h3>
                     </div>
 
                     {/* Ear-Specific Metrics Preview Grid */}

@@ -91,7 +91,7 @@ class ApiService {
     leftEarResult?: any,
     rightEarResult?: any
   ): Promise<ScreeningReportData> {
-    const generatedTestId = `TW-${Date.now().toString(36).toUpperCase()}`;
+    const generatedTestId = `ES-${Date.now().toString(36).toUpperCase()}`;
     const payload = {
       user_id: userId,
       test_id: generatedTestId,
@@ -207,9 +207,9 @@ class ApiService {
         concernLevel: concern,
         concernReason: reason,
         disclaimer:
-          'These tests are experimental and are not medically validated diagnostic procedures. TunnelWay / EchoSense only provides preliminary hearing-related screening observations. It cannot confirm or rule out hearing loss. For genuine hearing concerns, consult a qualified audiologist or healthcare professional.',
+          'These tests are experimental and are not medically validated diagnostic procedures. EchoSense only provides preliminary hearing-related screening observations. It cannot confirm or rule out hearing loss. For genuine hearing concerns, consult a qualified audiologist or healthcare professional.',
         thankYouMessage:
-          'Thank you for choosing TunnelWay / EchoSense. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
+          'Thank you for choosing EchoSense. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
       };
 
       // STRICT FIFO STORAGE: Store max 10 records isolated per user
@@ -226,8 +226,11 @@ class ApiService {
   public saveToUserHistory(userId: string, report: ScreeningReportData): void {
     if (!userId) return;
     try {
-      const storageKey = `tunnelway_history_${userId}`;
-      const existing: ScreeningReportData[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const storageKey = `echosense_history_${userId}`;
+      const legacyKey = `tunnelway_history_${userId}`;
+      const existing: ScreeningReportData[] = JSON.parse(
+        localStorage.getItem(storageKey) || localStorage.getItem(legacyKey) || '[]'
+      );
       
       // Filter out duplicate if same ID
       const filtered = existing.filter(r => (r.id !== report.id && r.testId !== report.testId));
@@ -254,8 +257,11 @@ class ApiService {
     if (!userId) return [];
     
     // Check local user cache first for instant response
-    const storageKey = `tunnelway_history_${userId}`;
-    const localHistory: ScreeningReportData[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    const storageKey = `echosense_history_${userId}`;
+    const legacyKey = `tunnelway_history_${userId}`;
+    const localHistory: ScreeningReportData[] = JSON.parse(
+      localStorage.getItem(storageKey) || localStorage.getItem(legacyKey) || '[]'
+    );
 
     try {
       const res = await this.request<any[]>(`/api/screening/user/${userId}`);
@@ -263,7 +269,7 @@ class ApiService {
         const userObj = JSON.parse(localStorage.getItem('echosense_user') || '{}');
         const remoteHistory: ScreeningReportData[] = res.map((r) => ({
           id: r.id,
-          testId: r.test_id || `TW-${r.id.slice(0, 8).toUpperCase()}`,
+          testId: r.test_id || `ES-${r.id.slice(0, 8).toUpperCase()}`,
           userId: r.user_id,
           userName: userObj.fullName || 'User',
           age: userObj.age || 30,
@@ -281,7 +287,7 @@ class ApiService {
           concernReason: r.concern_reason,
           disclaimer:
             'These tests are experimental screening observations. Informational use only.',
-          thankYouMessage: 'Your hearing health matters.',
+          thankYouMessage: 'Thank you for choosing EchoSense. Your hearing health matters.',
         }));
 
         // Strict FIFO max 10

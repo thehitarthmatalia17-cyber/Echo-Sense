@@ -165,7 +165,7 @@ class Database:
         if "test_id" in screening_data:
             freq_dict["test_id"] = screening_data["test_id"]
         else:
-            freq_dict["test_id"] = f"TW-{screening_id[:8].upper()}"
+            freq_dict["test_id"] = f"ES-{screening_id[:8].upper()}"
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -225,7 +225,7 @@ class Database:
                 tested_ear = freq_json.get("tested_ear", "both")
                 left_ear_result = freq_json.get("left_ear_result")
                 right_ear_result = freq_json.get("right_ear_result")
-                test_id = freq_json.get("test_id", f"TW-{r['id'][:8].upper()}")
+                test_id = freq_json.get("test_id", f"ES-{r['id'][:8].upper()}")
 
                 results.append({
                     "id": r["id"],
