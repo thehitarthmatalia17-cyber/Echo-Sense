@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #FAF9F6;
+    color: #121212;
+    font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Neo-Brutalist Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF9F6;
+  border-left: 2px solid #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #FFC700;
+  border: 2px solid #000000;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #000000;
+}
+
+/* Decorative Neo-Brutalist Dot Matrix Pattern */
+.bg-brutal-dots {
+  background-image: radial-gradient(#000000 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+/* Caution / Hazard Diagonal Stripes Pattern (as seen in uploaded phone image) */
+.bg-hazard-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    #000000,
+    #000000 12px,
+    #FFFFFF 12px,
+    #FFFFFF 24px
+  );
+}
+
+.bg-hazard-stripes-yellow {
+  background: repeating-linear-gradient(
+    -45deg,
+    #000000,
+    #000000 12px,
+    #FFC700 12px,
+    #FFC700 24px
+  );
+}
+
+/* Neo-Brutal Button Tactile Click Interaction */
+.btn-brutal {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-brutal:hover {
+  transform: translate(-1.5px, -1.5px);
+  box-shadow: 5px 5px 0px #000000;
+}
+.btn-brutal:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #000000;
+}
