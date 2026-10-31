@@ -195,6 +195,20 @@ class SpeechService {
   }
 
   /**
+   * Immediately stops any speech synthesis playback and voice recognition listening.
+   */
+  public stopAll(): void {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        // Ignored
+      }
+    }
+    this.stopListening();
+  }
+
+  /**
    * Compares two strings using Levenshtein distance & phonetic token matching.
    * Returns similarity percentage (0.0 to 100.0).
    */

@@ -188,15 +188,19 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
               minute: '2-digit',
             });
 
-            const testId = record.testId || `TW-${(record.id || 'TEST').slice(0, 8).toUpperCase()}`;
+            const testId = record.testId || `ES-${(record.id || 'TEST').replace('local-', '').slice(0, 8).toUpperCase()}`;
             const testedEar = record.testedEar || 'both';
 
-            const overallScore = Math.round(
-              (record.repetitionTest.accuracyPercentage +
-                record.misheardTest.accuracyPercentage +
-                record.frequencyTest.detectionPercentage) /
-                3
-            );
+            const validScores: number[] = [];
+            if (record.repetitionTest?.accuracyPercentage !== undefined) validScores.push(record.repetitionTest.accuracyPercentage);
+            if (record.misheardTest?.accuracyPercentage !== undefined) validScores.push(record.misheardTest.accuracyPercentage);
+            if (record.frequencyTest?.detectionPercentage !== undefined) validScores.push(record.frequencyTest.detectionPercentage);
+            if (record.leftEarResult?.frequencyDetectionPercentage !== undefined) validScores.push(record.leftEarResult.frequencyDetectionPercentage);
+            if (record.rightEarResult?.frequencyDetectionPercentage !== undefined) validScores.push(record.rightEarResult.frequencyDetectionPercentage);
+
+            const overallScore = validScores.length > 0
+              ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
+              : 0;
 
             return (
               <div
@@ -267,11 +271,11 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         <div className="flex items-center justify-between text-xs font-black uppercase text-sky-900 mb-1">
                           <span>Left Ear (X)</span>
                           <span className="text-[11px] px-1.5 py-0.2 bg-sky-200 border border-black rounded font-mono">
-                            {testedEar === 'right' ? 'N/A' : `${record.leftEarResult?.frequencyDetectionPercentage ?? record.frequencyTest.detectionPercentage}%`}
+                            {testedEar === 'right' ? 'N/A' : (record.leftEarResult?.frequencyDetectionPercentage ?? record.frequencyTest?.detectionPercentage ?? 'N/A') + '%'}
                           </span>
                         </div>
                         <p className="text-[11px] font-bold text-slate-700">
-                          {testedEar === 'right' ? 'Not evaluated' : (record.leftEarResult?.hearingStatus || 'Normal sensitivity indicator')}
+                          {testedEar === 'right' ? 'Not evaluated' : (record.leftEarResult?.hearingStatus || (record.frequencyTest ? 'Normal sensitivity indicator' : 'Skipped / Unassessed'))}
                         </p>
                       </div>
 
@@ -280,11 +284,11 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         <div className="flex items-center justify-between text-xs font-black uppercase text-amber-900 mb-1">
                           <span>Right Ear (O)</span>
                           <span className="text-[11px] px-1.5 py-0.2 bg-amber-200 border border-black rounded font-mono">
-                            {testedEar === 'left' ? 'N/A' : `${record.rightEarResult?.frequencyDetectionPercentage ?? record.frequencyTest.detectionPercentage}%`}
+                            {testedEar === 'left' ? 'N/A' : (record.rightEarResult?.frequencyDetectionPercentage ?? record.frequencyTest?.detectionPercentage ?? 'N/A') + '%'}
                           </span>
                         </div>
                         <p className="text-[11px] font-bold text-slate-700">
-                          {testedEar === 'left' ? 'Not evaluated' : (record.rightEarResult?.hearingStatus || 'Normal sensitivity indicator')}
+                          {testedEar === 'left' ? 'Not evaluated' : (record.rightEarResult?.hearingStatus || (record.frequencyTest ? 'Normal sensitivity indicator' : 'Skipped / Unassessed'))}
                         </p>
                       </div>
 
@@ -297,7 +301,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                           </span>
                         </div>
                         <p className="text-[11px] font-bold text-slate-700">
-                          Speech: {record.repetitionTest.accuracyPercentage}% | Contrast: {record.misheardTest.accuracyPercentage}%
+                          Speech: {record.repetitionTest ? `${record.repetitionTest.accuracyPercentage}%` : 'Skipped'} | Contrast: {record.misheardTest ? `${record.misheardTest.accuracyPercentage}%` : 'Skipped'}
                         </p>
                       </div>
 
@@ -393,12 +397,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-black text-sm uppercase text-sky-900">Left Ear Evaluation (Blue X)</span>
                   <span className="text-xs font-bold px-2 py-0.5 bg-sky-200 border border-black rounded">
-                    {selectedRecord.leftEarResult?.frequencyDetectionPercentage ?? selectedRecord.frequencyTest.detectionPercentage}% Detection
+                    {selectedRecord.leftEarResult?.frequencyDetectionPercentage ?? selectedRecord.frequencyTest?.detectionPercentage ?? 'N/A'}% Detection
                   </span>
                 </div>
                 <div className="space-y-1.5 text-xs font-bold text-slate-700">
                   <p>• Tested Frequencies: 250 Hz – 12,000 Hz</p>
-                  <p>• Tone Detection: {selectedRecord.leftEarResult?.detectedTones ?? selectedRecord.frequencyTest.detectedTones} of {selectedRecord.leftEarResult?.totalTones ?? selectedRecord.frequencyTest.totalTones} tones heard</p>
+                  <p>• Tone Detection: {selectedRecord.leftEarResult?.detectedTones ?? selectedRecord.frequencyTest?.detectedTones ?? 0} of {selectedRecord.leftEarResult?.totalTones ?? selectedRecord.frequencyTest?.totalTones ?? 8} tones heard</p>
                   <p>• Est. Threshold: 15–20 dB HL (Informational screening estimate)</p>
                   <p>• Masking: Contralateral pink noise isolation</p>
                 </div>
@@ -409,12 +413,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-black text-sm uppercase text-amber-900">Right Ear Evaluation (Red O)</span>
                   <span className="text-xs font-bold px-2 py-0.5 bg-amber-200 border border-black rounded">
-                    {selectedRecord.rightEarResult?.frequencyDetectionPercentage ?? selectedRecord.frequencyTest.detectionPercentage}% Detection
+                    {selectedRecord.rightEarResult?.frequencyDetectionPercentage ?? selectedRecord.frequencyTest?.detectionPercentage ?? 'N/A'}% Detection
                   </span>
                 </div>
                 <div className="space-y-1.5 text-xs font-bold text-slate-700">
                   <p>• Tested Frequencies: 250 Hz – 12,000 Hz</p>
-                  <p>• Tone Detection: {selectedRecord.rightEarResult?.detectedTones ?? selectedRecord.frequencyTest.detectedTones} of {selectedRecord.rightEarResult?.totalTones ?? selectedRecord.frequencyTest.totalTones} tones heard</p>
+                  <p>• Tone Detection: {selectedRecord.rightEarResult?.detectedTones ?? selectedRecord.frequencyTest?.detectedTones ?? 0} of {selectedRecord.rightEarResult?.totalTones ?? selectedRecord.frequencyTest?.totalTones ?? 8} tones heard</p>
                   <p>• Est. Threshold: 15–20 dB HL (Informational screening estimate)</p>
                   <p>• Masking: Contralateral pink noise isolation</p>
                 </div>
@@ -428,7 +432,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                 Frequency Sensitivity Audiogram
               </h4>
               <div className="h-64">
-                <AudiogramChart responses={selectedRecord.frequencyTest.responses} />
+                <AudiogramChart responses={selectedRecord.frequencyTest?.responses || selectedRecord.leftEarResult?.responses || selectedRecord.rightEarResult?.responses || []} />
               </div>
             </div>
 
@@ -439,7 +443,9 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                   Test 1: Sentence Repetition
                 </h5>
                 <p className="text-xs font-bold text-slate-700">
-                  Accuracy: {selectedRecord.repetitionTest.accuracyPercentage}% ({selectedRecord.repetitionTest.correctAnswers}/{selectedRecord.repetitionTest.totalQuestions} stages correct, {selectedRecord.repetitionTest.totalRepetitions} replays)
+                  {selectedRecord.repetitionTest 
+                    ? `Accuracy: ${selectedRecord.repetitionTest.accuracyPercentage}% (${selectedRecord.repetitionTest.correctAnswers}/${selectedRecord.repetitionTest.totalQuestions} stages correct, ${selectedRecord.repetitionTest.totalRepetitions} replays)`
+                    : 'Module skipped by user.'}
                 </p>
               </div>
 
@@ -448,7 +454,9 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                   Test 2: Minimal-Pairs Contrast
                 </h5>
                 <p className="text-xs font-bold text-slate-700">
-                  Accuracy: {selectedRecord.misheardTest.accuracyPercentage}% ({selectedRecord.misheardTest.correctlyRecognized.length}/{selectedRecord.misheardTest.totalWords} pairs correct)
+                  {selectedRecord.misheardTest
+                    ? `Accuracy: ${selectedRecord.misheardTest.accuracyPercentage}% (${selectedRecord.misheardTest.correctlyRecognized?.length || 0}/${selectedRecord.misheardTest.totalWords || 5} pairs correct)`
+                    : 'Module skipped by user.'}
                 </p>
               </div>
             </div>

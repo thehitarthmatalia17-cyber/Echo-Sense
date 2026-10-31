@@ -28,8 +28,9 @@ interface AudiogramChartProps {
   responses: ToneResponse[];
 }
 
-export const AudiogramChart: React.FC<AudiogramChartProps> = ({ responses }) => {
-  const sorted = [...responses].sort((a, b) => a.frequencyHz - b.frequencyHz);
+export const AudiogramChart: React.FC<AudiogramChartProps> = ({ responses = [] }) => {
+  const safeResponses = Array.isArray(responses) ? responses : [];
+  const sorted = [...safeResponses].sort((a, b) => a.frequencyHz - b.frequencyHz);
 
   const labels = sorted.map((r) => `${r.frequencyHz} Hz`);
   const dataPoints = sorted.map((r) => (r.heard ? 95 : 20));

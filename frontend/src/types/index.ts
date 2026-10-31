@@ -108,7 +108,7 @@ export interface EarScreeningResult {
 
 export interface ScreeningReportData {
   id?: string;
-  testId?: string; // e.g. "TW-20261031-8F42"
+  testId?: string; // e.g. "ES-20261101-8F42"
   userId: string;
   userName: string;
   age: number;
@@ -117,9 +117,11 @@ export interface ScreeningReportData {
   testedEar?: EarMode;
   leftEarResult?: EarScreeningResult;
   rightEarResult?: EarScreeningResult;
-  repetitionTest: RepetitionTestSummary;
-  misheardTest: MisheardTestSummary;
-  frequencyTest: FrequencyTestSummary;
+  repetitionTest?: RepetitionTestSummary | null;
+  misheardTest?: MisheardTestSummary | null;
+  frequencyTest?: FrequencyTestSummary | null;
+  skippedTests?: string[];
+  testStatuses?: Record<string, 'completed' | 'skipped' | 'not_taken'>;
   detectedFrequencyRanges: string[];
   missedFrequencyRanges: string[];
   concernLevel: 'LOW' | 'MODERATE' | 'HIGH';

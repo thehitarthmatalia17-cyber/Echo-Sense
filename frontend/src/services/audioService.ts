@@ -3,6 +3,7 @@ export type EarChannel = 'left' | 'right' | 'both';
 class AudioService {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  private activeNodes: Set<{ stop: () => void }> = new Set();
 
   public getAudioContext(): AudioContext {
     if (!this.ctx || this.ctx.state === 'closed') {
@@ -166,7 +167,19 @@ class AudioService {
       osc.start(now);
       osc.stop(now + durationSec);
 
+      const activeHandle = {
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+          } catch (e) {}
+          if (maskingHandle) maskingHandle.stop();
+        }
+      };
+      this.activeNodes.add(activeHandle);
+
       osc.onended = () => {
+        this.activeNodes.delete(activeHandle);
         if (maskingHandle) maskingHandle.stop();
         resolve();
       };
@@ -221,10 +234,50 @@ class AudioService {
       osc.start(now);
       osc.stop(now + durationSec);
 
+      const activeHandle = {
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+          } catch (e) {}
+        }
+      };
+      this.activeNodes.add(activeHandle);
+
       osc.onended = () => {
+        this.activeNodes.delete(activeHandle);
         resolve();
       };
     });
+  }
+
+  /**
+   * Immediately halts all ongoing audio playback, oscillators, synthesized masking,
+   * and browser speech synthesis.
+   */
+  public stopAll(): void {
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch (e) {}
+
+    this.activeNodes.forEach(node => {
+      try {
+        node.stop();
+      } catch (e) {}
+    });
+    this.activeNodes.clear();
+
+    try {
+      if (this.ctx && this.ctx.state !== 'closed') {
+        this.ctx.suspend().then(() => {
+          if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+        });
+      }
+    } catch (e) {}
   }
 }
 

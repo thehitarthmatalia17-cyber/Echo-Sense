@@ -22,8 +22,8 @@ interface NavbarProps {
   onLanguageChange: (lang: LanguageCode) => void;
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onRestartClick: () => void;
-  hasActiveSession: boolean;
+  onRestartClick?: () => void;
+  hasActiveSession?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,8 +31,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLanguageChange,
   activeTab,
   onTabChange,
-  onRestartClick,
-  hasActiveSession
 }) => {
   const t = translations[currentLanguage] || translations.en;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -171,18 +169,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Restart Session Button */}
-            {hasActiveSession && (
-              <button
-                onClick={onRestartClick}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white hover:bg-rose-100 text-black border-2 border-black shadow-brutal-sm text-xs font-black uppercase transition-all cursor-pointer"
-                title="Restart Session"
-              >
-                <RotateCcw className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span className="hidden sm:inline">RESET</span>
-              </button>
-            )}
 
             {/* Mobile Hamburger Toggle */}
             <button

@@ -153,13 +153,28 @@ export class PdfService {
     doc.setTextColor(18, 18, 18);
     doc.text(badgeText, margin + 6, currentY + 8);
 
-    // Overall Score
-    const overallScore = Math.round(
-      (report.repetitionTest.accuracyPercentage +
-        report.misheardTest.accuracyPercentage +
-        report.frequencyTest.detectionPercentage) /
-        3
-    );
+    // Overall Score - dynamically computed only from non-skipped completed tests
+    const validScores: number[] = [];
+    if (report.repetitionTest?.accuracyPercentage !== undefined) {
+      validScores.push(report.repetitionTest.accuracyPercentage);
+    }
+    if (report.misheardTest?.accuracyPercentage !== undefined) {
+      validScores.push(report.misheardTest.accuracyPercentage);
+    }
+    if (report.frequencyTest?.detectionPercentage !== undefined) {
+      validScores.push(report.frequencyTest.detectionPercentage);
+    }
+    if (report.leftEarResult?.frequencyDetectionPercentage !== undefined) {
+      validScores.push(report.leftEarResult.frequencyDetectionPercentage);
+    }
+    if (report.rightEarResult?.frequencyDetectionPercentage !== undefined) {
+      validScores.push(report.rightEarResult.frequencyDetectionPercentage);
+    }
+
+    const overallScore = validScores.length > 0
+      ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
+      : 0;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(18, 18, 18);
@@ -193,11 +208,13 @@ export class PdfService {
     doc.setTextColor(255, 255, 255);
     doc.text('LEFT EAR TEST METRICS (BLUE [X])', margin + 4, currentY + 4.2);
 
-    const leftTested = report.testedEar === 'left' || report.testedEar === 'both' || !report.testedEar;
+    const hasLeftResult = Boolean(report.leftEarResult);
+    const hasFrequencyTest = Boolean(report.frequencyTest);
+    const leftTested = hasLeftResult || (hasFrequencyTest && (report.testedEar === 'left' || report.testedEar === 'both' || !report.testedEar));
     const leftDetection = report.leftEarResult?.frequencyDetectionPercentage ?? 
-      (report.testedEar === 'left' ? report.frequencyTest.detectionPercentage : (leftTested ? report.frequencyTest.detectionPercentage : 0));
-    const leftDetectedCount = report.leftEarResult?.detectedTones ?? (leftTested ? report.frequencyTest.detectedTones : 0);
-    const leftTotalCount = report.leftEarResult?.totalTones ?? (leftTested ? report.frequencyTest.totalTones : 8);
+      (report.testedEar === 'left' ? (report.frequencyTest?.detectionPercentage ?? 0) : (leftTested ? (report.frequencyTest?.detectionPercentage ?? 0) : 0));
+    const leftDetectedCount = report.leftEarResult?.detectedTones ?? (leftTested ? (report.frequencyTest?.detectedTones ?? 0) : 0);
+    const leftTotalCount = report.leftEarResult?.totalTones ?? (leftTested ? (report.frequencyTest?.totalTones ?? 8) : 8);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -247,11 +264,12 @@ export class PdfService {
     doc.setTextColor(255, 255, 255);
     doc.text('RIGHT EAR TEST METRICS (RED [O])', rightX + 4, currentY + 4.2);
 
-    const rightTested = report.testedEar === 'right' || report.testedEar === 'both' || !report.testedEar;
+    const hasRightResult = Boolean(report.rightEarResult);
+    const rightTested = hasRightResult || (hasFrequencyTest && (report.testedEar === 'right' || report.testedEar === 'both' || !report.testedEar));
     const rightDetection = report.rightEarResult?.frequencyDetectionPercentage ?? 
-      (report.testedEar === 'right' ? report.frequencyTest.detectionPercentage : (rightTested ? report.frequencyTest.detectionPercentage : 0));
-    const rightDetectedCount = report.rightEarResult?.detectedTones ?? (rightTested ? report.frequencyTest.detectedTones : 0);
-    const rightTotalCount = report.rightEarResult?.totalTones ?? (rightTested ? report.frequencyTest.totalTones : 8);
+      (report.testedEar === 'right' ? (report.frequencyTest?.detectionPercentage ?? 0) : (rightTested ? (report.frequencyTest?.detectionPercentage ?? 0) : 0));
+    const rightDetectedCount = report.rightEarResult?.detectedTones ?? (rightTested ? (report.frequencyTest?.detectedTones ?? 0) : 0);
+    const rightTotalCount = report.rightEarResult?.totalTones ?? (rightTested ? (report.frequencyTest?.totalTones ?? 8) : 8);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -355,7 +373,7 @@ export class PdfService {
     });
 
     // Plot Left Ear (Blue X)
-    const leftResponses: ToneResponse[] = report.leftEarResult?.responses || report.frequencyTest.responses || [];
+    const leftResponses: ToneResponse[] = report.leftEarResult?.responses || report.frequencyTest?.responses || [];
     const leftPoints: Array<{ x: number; y: number }> = [];
 
     frequencies.forEach((freq, idx) => {
@@ -386,7 +404,7 @@ export class PdfService {
     }
 
     // Plot Right Ear (Red O)
-    const rightResponses: ToneResponse[] = report.rightEarResult?.responses || report.frequencyTest.responses || [];
+    const rightResponses: ToneResponse[] = report.rightEarResult?.responses || report.frequencyTest?.responses || [];
     const rightPoints: Array<{ x: number; y: number }> = [];
 
     frequencies.forEach((freq, idx) => {
@@ -413,6 +431,20 @@ export class PdfService {
       }
     }
 
+    // If neither ear was tested for pure tones (e.g., pure tone / ear assessment skipped)
+    if (!leftTested && !rightTested) {
+      doc.setFillColor(255, 255, 255, 0.85);
+      doc.rect(chartX + 10, chartY + 12, chartW - 20, 14, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 80, 20);
+      doc.text('PURE TONE TESTING SKIPPED • NO AUDIOGRAM PLOT AVAILABLE', chartX + chartW / 2, chartY + 18, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(80, 80, 80);
+      doc.text('Pure tone frequency detection was not evaluated in this screening session.', chartX + chartW / 2, chartY + 23, { align: 'center' });
+    }
+
     // ----------------------------------------------------
     // 6. SPEECH AUDIOMETRY & COGNITIVE TESTS SUMMARY
     // ----------------------------------------------------
@@ -429,30 +461,53 @@ export class PdfService {
     doc.text('SPEECH DISCRIMINATION & BANDWIDTH RESILIENCE', margin + 4, currentY + 5.5);
 
     // Test 1 summary
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text(`Test 1: Sentence Repetition across Bandwidths`, margin + 4, currentY + 11.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Accuracy: ${report.repetitionTest.accuracyPercentage}% (${report.repetitionTest.correctAnswers}/${report.repetitionTest.totalQuestions} stages correct, ${report.repetitionTest.totalRepetitions} audio replays requested)`,
-      margin + 4,
-      currentY + 16
-    );
+    if (report.repetitionTest) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(18, 18, 18);
+      doc.text(`Test 1: Sentence Repetition across Bandwidths [COMPLETED]`, margin + 4, currentY + 11.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `Accuracy: ${report.repetitionTest.accuracyPercentage}% (${report.repetitionTest.correctAnswers}/${report.repetitionTest.totalQuestions} stages correct, ${report.repetitionTest.totalRepetitions} audio replays requested)`,
+        margin + 4,
+        currentY + 16
+      );
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 100, 20);
+      doc.text(`Test 1: Sentence Repetition across Bandwidths [SKIPPED - INCOMPLETE]`, margin + 4, currentY + 11.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Status: Test skipped by user. Auditory speech perception across bandpass filters was not evaluated.`, margin + 4, currentY + 16);
+    }
 
     // Test 2 summary
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Test 2: Minimal-Pairs Phonemic Distinction`, margin + 4, currentY + 22);
-    doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Accuracy: ${report.misheardTest.accuracyPercentage}% (${report.misheardTest.correctlyRecognized.length}/${report.misheardTest.totalWords} pairs correctly distinguished)`,
-      margin + 4,
-      currentY + 26.5
-    );
+    if (report.misheardTest) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(18, 18, 18);
+      doc.text(`Test 2: Minimal-Pairs Phonemic Distinction [COMPLETED]`, margin + 4, currentY + 22);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `Accuracy: ${report.misheardTest.accuracyPercentage}% (${report.misheardTest.correctlyRecognized?.length || 0}/${report.misheardTest.totalWords || 5} pairs correctly distinguished)`,
+        margin + 4,
+        currentY + 26.5
+      );
 
-    const areas = report.misheardTest.beneficialAssessmentAreas?.join(', ') || 'Vowel Formants, High Fricatives';
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
-    doc.text(`Focus Areas Evaluated: ${areas}`, margin + 4, currentY + 31);
+      const areas = report.misheardTest.beneficialAssessmentAreas?.join(', ') || 'Vowel Formants, High Fricatives';
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Focus Areas Evaluated: ${areas}`, margin + 4, currentY + 31);
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 100, 20);
+      doc.text(`Test 2: Minimal-Pairs Phonemic Distinction [SKIPPED - INCOMPLETE]`, margin + 4, currentY + 22);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Status: Test skipped by user. Phonemic discrimination across minimal word pairs was not evaluated.`, margin + 4, currentY + 26.5);
+    }
 
     // ----------------------------------------------------
     // 7. MEDICAL DISCLAIMER & MANDATORY NOTICE

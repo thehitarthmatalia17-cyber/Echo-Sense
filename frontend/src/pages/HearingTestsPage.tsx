@@ -39,14 +39,14 @@ export const HearingTestsPage: React.FC<HearingTestsPageProps> = ({
       <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-12">
         <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg bg-[#FFC700] border-2 border-black shadow-brutal-xs text-xs font-black uppercase tracking-wider mb-3">
           <Layers className="w-3.5 h-3.5" />
-          <span>ECHOSENSE AUDITORY SUITE • 4 TESTING MODULES AVAILABLE</span>
+          <span>ECHOSENSE AUDITORY SUITE • 4 DISTINCT TESTS AVAILABLE</span>
         </div>
 
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-black tracking-tight uppercase">
           Hearing Tests
         </h1>
         <p className="mt-3 text-sm sm:text-base font-bold text-slate-700 leading-relaxed">
-          Select from our four specialized auditory screening modules. Test specific speech formants, minimal phonemic contrasts, pure tone thresholds, or evaluate your left and right ears individually.
+          Select from our four specialized auditory screening tests below. You can launch any individual test directly, or click <strong>Start Full Screening</strong> to evaluate all four modules sequentially in a single comprehensive checkup.
         </p>
       </div>
 
@@ -225,25 +225,21 @@ export const HearingTestsPage: React.FC<HearingTestsPageProps> = ({
         </div>
 
         {/* ======================================================== */}
-        {/* OPTION 4: Individual Ear Assessment (NEW 4TH TEST) */}
+        {/* OPTION 4: Individual Ear Assessment (TEST 4 OF 4) */}
         {/* ======================================================== */}
-        <div className="bg-gradient-to-br from-amber-50 to-sky-50 border-3 border-black rounded-3xl p-6 sm:p-8 shadow-brutal hover:shadow-brutal-lg hover:-translate-y-1 transition-all flex flex-col justify-between group relative overflow-hidden">
-          <div className="absolute top-0 right-0 bg-[#FFC700] text-black font-black text-[10px] uppercase px-3 py-1 border-b-2 border-l-2 border-black">
-            NEW FEATURE
-          </div>
-
+        <div className="bg-white border-3 border-black rounded-3xl p-6 sm:p-8 shadow-brutal hover:shadow-brutal-lg hover:-translate-y-1 transition-all flex flex-col justify-between group">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <div className="w-14 h-14 rounded-2xl bg-black text-[#FFC700] border-2 border-black shadow-brutal-xs flex items-center justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 border-2 border-black shadow-brutal-xs flex items-center justify-center text-black">
                 <Headphones className="w-7 h-7 stroke-[2.5]" />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-black text-[#FFC700] rounded-md border border-black shadow-brutal-xs mr-16 sm:mr-20">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-black text-[#FFC700] rounded-md border border-black shadow-brutal-xs">
                 MODULE 04
               </span>
             </div>
 
             <div className="flex items-center space-x-2 mb-1">
-              <span className="text-xs font-black uppercase px-2 py-0.5 bg-black text-white rounded">
+              <span className="text-xs font-black uppercase px-2 py-0.5 bg-[#FAF9F6] border border-black rounded text-slate-800">
                 UNILATERAL AUDIOMETRIC ISOLATION
               </span>
             </div>
@@ -252,7 +248,7 @@ export const HearingTestsPage: React.FC<HearingTestsPageProps> = ({
               Individual Ear Assessment
             </h3>
 
-            <p className="text-xs sm:text-sm font-bold text-slate-700 leading-relaxed mb-4">
+            <p className="text-xs sm:text-sm font-bold text-slate-600 leading-relaxed mb-4">
               Independently evaluates your Left Ear or Right Ear. Uses Web Audio API stereo panning to isolate sound to one ear while streaming soft contralateral pink noise to mask the opposite ear.
             </p>
 
@@ -260,40 +256,42 @@ export const HearingTestsPage: React.FC<HearingTestsPageProps> = ({
             <div className="grid grid-cols-2 gap-3 mb-6">
               
               {/* Left Ear Choice */}
-              <div
+              <button
+                type="button"
                 onClick={() => setSelectedIndividualEar('left')}
-                className={`p-3.5 rounded-xl border-2 border-black cursor-pointer transition-all ${
+                className={`p-3 rounded-xl border-2 border-black cursor-pointer transition-all text-left ${
                   selectedIndividualEar === 'left'
-                    ? 'bg-sky-200 shadow-brutal-xs font-black'
-                    : 'bg-white hover:bg-sky-50 font-bold'
+                    ? 'bg-sky-200 shadow-brutal-xs font-black ring-2 ring-black'
+                    : 'bg-white hover:bg-sky-50 font-bold opacity-80'
                 }`}
               >
                 <div className="flex items-center space-x-2 text-xs uppercase text-sky-950 mb-1">
-                  <Ear className="w-4 h-4 text-sky-700" />
-                  <span>1. Left Ear Test</span>
+                  <Ear className="w-4 h-4 text-sky-700 shrink-0" />
+                  <span>1. Left Ear</span>
                 </div>
                 <p className="text-[10px] text-slate-600 leading-tight">
-                  Evaluates left ear; right ear receives acoustic pink masking.
+                  Left ear tested; right ear pink masked.
                 </p>
-              </div>
+              </button>
 
               {/* Right Ear Choice */}
-              <div
+              <button
+                type="button"
                 onClick={() => setSelectedIndividualEar('right')}
-                className={`p-3.5 rounded-xl border-2 border-black cursor-pointer transition-all ${
+                className={`p-3 rounded-xl border-2 border-black cursor-pointer transition-all text-left ${
                   selectedIndividualEar === 'right'
-                    ? 'bg-amber-200 shadow-brutal-xs font-black'
-                    : 'bg-white hover:bg-amber-50 font-bold'
+                    ? 'bg-amber-200 shadow-brutal-xs font-black ring-2 ring-black'
+                    : 'bg-white hover:bg-amber-50 font-bold opacity-80'
                 }`}
               >
                 <div className="flex items-center space-x-2 text-xs uppercase text-amber-950 mb-1">
-                  <Ear className="w-4 h-4 text-amber-700" />
-                  <span>2. Right Ear Test</span>
+                  <Ear className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>2. Right Ear</span>
                 </div>
                 <p className="text-[10px] text-slate-600 leading-tight">
-                  Evaluates right ear; left ear receives acoustic pink masking.
+                  Right ear tested; left ear pink masked.
                 </p>
-              </div>
+              </button>
 
             </div>
           </div>
@@ -303,7 +301,7 @@ export const HearingTestsPage: React.FC<HearingTestsPageProps> = ({
             className="w-full flex items-stretch rounded-xl border-2 border-black shadow-brutal bg-[#FFC700] hover:bg-[#E5B200] active:translate-x-0.5 active:translate-y-0.5 active:shadow-brutal-xs transition-all cursor-pointer overflow-hidden group/btn"
           >
             <span className="flex-1 py-3.5 text-center font-black uppercase tracking-wider text-xs sm:text-sm text-black flex items-center justify-center">
-              START {selectedIndividualEar === 'left' ? 'LEFT' : 'RIGHT'} EAR ASSESSMENT
+              START {selectedIndividualEar === 'left' ? 'LEFT' : 'RIGHT'} EAR TEST
             </span>
             <div className="bg-black text-[#FFC700] px-4 flex items-center justify-center border-l-2 border-black group-hover/btn:text-white transition-colors">
               <ArrowRight className="w-4 h-4 stroke-[3]" />

@@ -44,13 +44,27 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
   const t = translations[currentLanguage] || translations.en;
   const [showRestartModal, setShowRestartModal] = useState(false);
 
-  // Overall screening aggregate score
-  const overallScore = Math.round(
-    (report.repetitionTest.accuracyPercentage +
-      report.misheardTest.accuracyPercentage +
-      report.frequencyTest.detectionPercentage) /
-      3
-  );
+  // Overall screening aggregate score - only includes non-skipped completed tests
+  const validScores: number[] = [];
+  if (report.repetitionTest?.accuracyPercentage !== undefined) {
+    validScores.push(report.repetitionTest.accuracyPercentage);
+  }
+  if (report.misheardTest?.accuracyPercentage !== undefined) {
+    validScores.push(report.misheardTest.accuracyPercentage);
+  }
+  if (report.frequencyTest?.detectionPercentage !== undefined) {
+    validScores.push(report.frequencyTest.detectionPercentage);
+  }
+  if (report.leftEarResult?.frequencyDetectionPercentage !== undefined) {
+    validScores.push(report.leftEarResult.frequencyDetectionPercentage);
+  }
+  if (report.rightEarResult?.frequencyDetectionPercentage !== undefined) {
+    validScores.push(report.rightEarResult.frequencyDetectionPercentage);
+  }
+
+  const overallScore = validScores.length > 0
+    ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
+    : 0;
 
   const getConcernBadge = () => {
     switch (report.concernLevel) {
@@ -112,10 +126,17 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
       {/* Top Header & Quick Actions */}
       <div className="bg-white border-[2.5px] border-black rounded-3xl p-6 sm:p-8 shadow-brutal-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center space-x-1.5 text-[11px] font-black uppercase tracking-wider text-black bg-[#FFC700] px-3 py-1 border border-black shadow-brutal-xs mb-2">
-            <Award className="w-3.5 h-3.5" />
-            <span>REPORT GENERATED • ALL 3 TESTS COMPLETED</span>
-          </div>
+          {report.skippedTests && report.skippedTests.length > 0 ? (
+            <div className="inline-flex items-center space-x-1.5 text-[11px] font-black uppercase tracking-wider text-black bg-amber-300 px-3 py-1 border border-black shadow-brutal-xs mb-2">
+              <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>PARTIAL SCREENING REPORT • {Math.max(1, 4 - report.skippedTests.length)} OF 4 MODULES COMPLETED ({report.skippedTests.length} SKIPPED)</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center space-x-1.5 text-[11px] font-black uppercase tracking-wider text-black bg-[#FFC700] px-3 py-1 border border-black shadow-brutal-xs mb-2">
+              <Award className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>FULL SCREENING REPORT • ALL 4 MODULES COMPLETED</span>
+            </div>
+          )}
           <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-black">
             {t.results.title}
           </h1>
@@ -238,6 +259,21 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
         </p>
       </div>
 
+      {/* Skipped Modules Warning Notice if applicable */}
+      {report.skippedTests && report.skippedTests.length > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-50 border-2 border-black shadow-brutal flex items-start space-x-3">
+          <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">
+              Incomplete Screening Assessment • {report.skippedTests.length} Module(s) Skipped
+            </h4>
+            <p className="text-xs font-semibold text-amber-900 mt-0.5 leading-relaxed">
+              The following tests were skipped during this screening session: <strong>{report.skippedTests.join(', ')}</strong>. Unassessed auditory domains are excluded from your Acuity Index calculation, and no fabricated or estimated clinical audiometric values were generated.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Ear-Specific Auditory Metrics (Left Ear vs Right Ear) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Left Ear Performance Card */}
@@ -250,7 +286,11 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
               </h4>
             </div>
             <span className="text-xs font-mono font-black px-2.5 py-0.5 bg-sky-200 border border-black rounded text-black">
-              {report.testedEar === 'right' ? 'NOT EVALUATED' : `${report.leftEarResult?.frequencyDetectionPercentage ?? report.frequencyTest.detectionPercentage}%`}
+              {report.leftEarResult
+                ? `${report.leftEarResult.frequencyDetectionPercentage}%`
+                : (report.frequencyTest && (report.testedEar === 'left' || report.testedEar === 'both' || !report.testedEar)
+                    ? `${report.frequencyTest.detectionPercentage}%`
+                    : 'NOT EVALUATED')}
             </span>
           </div>
 
@@ -262,13 +302,21 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
             <div className="flex justify-between py-1 border-b border-black/10">
               <span className="text-slate-600">Pure Tone Detection:</span>
               <span>
-                {report.testedEar === 'right' ? 'N/A' : `${report.leftEarResult?.detectedTones ?? report.frequencyTest.detectedTones} of ${report.leftEarResult?.totalTones ?? report.frequencyTest.totalTones} tones heard`}
+                {report.leftEarResult
+                  ? `${report.leftEarResult.detectedTones} of ${report.leftEarResult.totalTones} tones heard`
+                  : (report.frequencyTest && (report.testedEar === 'left' || report.testedEar === 'both' || !report.testedEar)
+                      ? `${report.frequencyTest.detectedTones} of ${report.frequencyTest.totalTones} tones heard`
+                      : 'N/A (Skipped)')}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-black/10">
               <span className="text-slate-600">Screening Threshold:</span>
               <span className="text-emerald-700">
-                {report.testedEar === 'right' ? 'N/A' : (report.frequencyTest.detectionPercentage >= 80 ? '15–20 dB HL (Normal Screening Est.)' : 'Elevated (>30 dB HL)')}
+                {report.leftEarResult
+                  ? (report.leftEarResult.frequencyDetectionPercentage >= 80 ? '15–20 dB HL (Normal Sensitivity Est.)' : 'Elevated (>30 dB HL)')
+                  : (report.frequencyTest && (report.testedEar === 'left' || report.testedEar === 'both' || !report.testedEar)
+                      ? (report.frequencyTest.detectionPercentage >= 80 ? '15–20 dB HL (Normal Sensitivity Est.)' : 'Elevated (>30 dB HL)')
+                      : 'N/A (Skipped)')}
               </span>
             </div>
             <div className="flex justify-between py-1">
@@ -288,7 +336,11 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
               </h4>
             </div>
             <span className="text-xs font-mono font-black px-2.5 py-0.5 bg-amber-200 border border-black rounded text-black">
-              {report.testedEar === 'left' ? 'NOT EVALUATED' : `${report.rightEarResult?.frequencyDetectionPercentage ?? report.frequencyTest.detectionPercentage}%`}
+              {report.rightEarResult
+                ? `${report.rightEarResult.frequencyDetectionPercentage}%`
+                : (report.frequencyTest && (report.testedEar === 'right' || report.testedEar === 'both' || !report.testedEar)
+                    ? `${report.frequencyTest.detectionPercentage}%`
+                    : 'NOT EVALUATED')}
             </span>
           </div>
 
@@ -300,13 +352,21 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
             <div className="flex justify-between py-1 border-b border-black/10">
               <span className="text-slate-600">Pure Tone Detection:</span>
               <span>
-                {report.testedEar === 'left' ? 'N/A' : `${report.rightEarResult?.detectedTones ?? report.frequencyTest.detectedTones} of ${report.rightEarResult?.totalTones ?? report.frequencyTest.totalTones} heard`}
+                {report.rightEarResult
+                  ? `${report.rightEarResult.detectedTones} of ${report.rightEarResult.totalTones} tones heard`
+                  : (report.frequencyTest && (report.testedEar === 'right' || report.testedEar === 'both' || !report.testedEar)
+                      ? `${report.frequencyTest.detectedTones} of ${report.frequencyTest.totalTones} tones heard`
+                      : 'N/A (Skipped)')}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-black/10">
               <span className="text-slate-600">Screening Threshold:</span>
               <span className="text-emerald-700">
-                {report.testedEar === 'left' ? 'N/A' : (report.frequencyTest.detectionPercentage >= 80 ? '15–20 dB HL (Normal Screening Est.)' : 'Elevated (>30 dB HL)')}
+                {report.rightEarResult
+                  ? (report.rightEarResult.frequencyDetectionPercentage >= 80 ? '15–20 dB HL (Normal Sensitivity Est.)' : 'Elevated (>30 dB HL)')
+                  : (report.frequencyTest && (report.testedEar === 'right' || report.testedEar === 'both' || !report.testedEar)
+                      ? (report.frequencyTest.detectionPercentage >= 80 ? '15–20 dB HL (Normal Sensitivity Est.)' : 'Elevated (>30 dB HL)')
+                      : 'N/A (Skipped)')}
               </span>
             </div>
             <div className="flex justify-between py-1">
@@ -317,8 +377,8 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
         </div>
       </div>
 
-      {/* Individual Sequential Test Score Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Individual Sequential Test Score Cards (All 4 Tests) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Test 1 Card */}
         <div className="bg-white rounded-2xl p-5 border-2 border-black shadow-brutal flex flex-col justify-between">
@@ -327,22 +387,37 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
               <span className="font-black uppercase text-black bg-[#FFC700] px-2 py-0.5 border border-black text-[10px]">
                 TEST 01: REPETITION
               </span>
-              <span className="text-gray-500 text-[10px] font-bold">{report.repetitionTest.totalRepetitions} REPEATS</span>
+              {report.repetitionTest ? (
+                <span className="text-gray-500 text-[10px] font-bold">{report.repetitionTest.totalRepetitions} REPEATS</span>
+              ) : (
+                <span className="text-amber-700 text-[10px] font-black bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">SKIPPED</span>
+              )}
             </div>
             <h4 className="font-black uppercase text-black text-xs">{t.results.test1Result}</h4>
-            <div className="my-3">
-              <div className="text-3xl font-black text-black">
-                {report.repetitionTest.accuracyPercentage}%
+            {report.repetitionTest ? (
+              <div className="my-3">
+                <div className="text-3xl font-black text-black">
+                  {report.repetitionTest.accuracyPercentage}%
+                </div>
+                <p className="text-[11px] font-bold text-gray-600 mt-0.5">
+                  {report.repetitionTest.correctAnswers} of {report.repetitionTest.totalQuestions} stages recognized
+                </p>
               </div>
-              <p className="text-[11px] font-bold text-gray-600 mt-0.5">
-                {report.repetitionTest.correctAnswers} of {report.repetitionTest.totalQuestions} stages recognized
-              </p>
-            </div>
+            ) : (
+              <div className="my-3">
+                <div className="text-lg font-black text-amber-700 uppercase">
+                  Skipped
+                </div>
+                <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                  Bandwidth filtering not evaluated
+                </p>
+              </div>
+            )}
           </div>
           <div className="w-full bg-gray-200 h-2.5 rounded-full border border-black overflow-hidden">
             <div
               className="bg-[#FFC700] h-full transition-all duration-500"
-              style={{ width: `${report.repetitionTest.accuracyPercentage}%` }}
+              style={{ width: `${report.repetitionTest?.accuracyPercentage ?? 0}%` }}
             />
           </div>
         </div>
@@ -354,22 +429,37 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
               <span className="font-black uppercase text-black bg-white px-2 py-0.5 border border-black text-[10px]">
                 TEST 02: CONTRAST
               </span>
-              <span className="text-gray-500 text-[10px] font-bold">{report.misheardTest.totalAttempts} ATTEMPTS</span>
+              {report.misheardTest ? (
+                <span className="text-gray-500 text-[10px] font-bold">{report.misheardTest.totalAttempts} ATTEMPTS</span>
+              ) : (
+                <span className="text-amber-700 text-[10px] font-black bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">SKIPPED</span>
+              )}
             </div>
             <h4 className="font-black uppercase text-black text-xs">{t.results.test2Result}</h4>
-            <div className="my-3">
-              <div className="text-3xl font-black text-black">
-                {report.misheardTest.accuracyPercentage}%
+            {report.misheardTest ? (
+              <div className="my-3">
+                <div className="text-3xl font-black text-black">
+                  {report.misheardTest.accuracyPercentage}%
+                </div>
+                <p className="text-[11px] font-bold text-gray-600 mt-0.5">
+                  {report.misheardTest.correctlyRecognized?.length || 0} minimal pairs distinguished
+                </p>
               </div>
-              <p className="text-[11px] font-bold text-gray-600 mt-0.5">
-                {report.misheardTest.correctlyRecognized.length} minimal pairs distinguished
-              </p>
-            </div>
+            ) : (
+              <div className="my-3">
+                <div className="text-lg font-black text-amber-700 uppercase">
+                  Skipped
+                </div>
+                <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                  Phonemic pairs not evaluated
+                </p>
+              </div>
+            )}
           </div>
           <div className="w-full bg-gray-200 h-2.5 rounded-full border border-black overflow-hidden">
             <div
               className="bg-black h-full transition-all duration-500"
-              style={{ width: `${report.misheardTest.accuracyPercentage}%` }}
+              style={{ width: `${report.misheardTest?.accuracyPercentage ?? 0}%` }}
             />
           </div>
         </div>
@@ -381,22 +471,88 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
               <span className="font-black uppercase text-black bg-[#FFC700] px-2 py-0.5 border border-black text-[10px]">
                 TEST 03: PURE TONES
               </span>
-              <span className="text-gray-500 text-[10px] font-bold">{report.frequencyTest.totalTones} TONES</span>
+              {report.frequencyTest ? (
+                <span className="text-gray-500 text-[10px] font-bold">{report.frequencyTest.totalTones} TONES</span>
+              ) : (
+                <span className="text-amber-700 text-[10px] font-black bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">SKIPPED</span>
+              )}
             </div>
             <h4 className="font-black uppercase text-black text-xs">{t.results.test3Result}</h4>
-            <div className="my-3">
-              <div className="text-3xl font-black text-black">
-                {report.frequencyTest.detectionPercentage}%
+            {report.frequencyTest ? (
+              <div className="my-3">
+                <div className="text-3xl font-black text-black">
+                  {report.frequencyTest.detectionPercentage}%
+                </div>
+                <p className="text-[11px] font-bold text-gray-600 mt-0.5">
+                  {report.frequencyTest.detectedTones} of {report.frequencyTest.totalTones} tones detected
+                </p>
               </div>
-              <p className="text-[11px] font-bold text-gray-600 mt-0.5">
-                {report.frequencyTest.detectedTones} of {report.frequencyTest.totalTones} tones detected
-              </p>
-            </div>
+            ) : (
+              <div className="my-3">
+                <div className="text-lg font-black text-amber-700 uppercase">
+                  Skipped
+                </div>
+                <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                  Pure tone sweep not evaluated
+                </p>
+              </div>
+            )}
           </div>
           <div className="w-full bg-gray-200 h-2.5 rounded-full border border-black overflow-hidden">
             <div
               className="bg-[#FFC700] h-full transition-all duration-500"
-              style={{ width: `${report.frequencyTest.detectionPercentage}%` }}
+              style={{ width: `${report.frequencyTest?.detectionPercentage ?? 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Test 4 Card: Individual Ear Assessment */}
+        <div className="bg-white rounded-2xl p-5 border-2 border-black shadow-brutal flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-black uppercase text-black bg-sky-200 px-2 py-0.5 border border-black text-[10px]">
+                TEST 04: EAR ASSESSMENT
+              </span>
+              {(report.leftEarResult || report.rightEarResult) ? (
+                <span className="text-gray-500 text-[10px] font-bold">ISOLATED</span>
+              ) : (
+                <span className="text-amber-700 text-[10px] font-black bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">SKIPPED</span>
+              )}
+            </div>
+            <h4 className="font-black uppercase text-black text-xs">Individual Ear Testing</h4>
+            {(report.leftEarResult || report.rightEarResult) ? (
+              <div className="my-3 space-y-1">
+                <div className="text-xs font-black text-sky-800">
+                  Left Ear: {report.leftEarResult ? `${report.leftEarResult.frequencyDetectionPercentage}%` : 'Not Done'}
+                </div>
+                <div className="text-xs font-black text-amber-800">
+                  Right Ear: {report.rightEarResult ? `${report.rightEarResult.frequencyDetectionPercentage}%` : 'Not Done'}
+                </div>
+                <p className="text-[10px] font-bold text-gray-500">
+                  Contralateral Pink Noise Masking
+                </p>
+              </div>
+            ) : (
+              <div className="my-3">
+                <div className="text-lg font-black text-amber-700 uppercase">
+                  Skipped
+                </div>
+                <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                  Ear isolation not evaluated
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="w-full bg-gray-200 h-2.5 rounded-full border border-black overflow-hidden">
+            <div
+              className="bg-sky-500 h-full transition-all duration-500"
+              style={{
+                width: `${
+                  report.leftEarResult && report.rightEarResult
+                    ? Math.round((report.leftEarResult.frequencyDetectionPercentage + report.rightEarResult.frequencyDetectionPercentage) / 2)
+                    : (report.leftEarResult?.frequencyDetectionPercentage || report.rightEarResult?.frequencyDetectionPercentage || 0)
+                }%`,
+              }}
             />
           </div>
         </div>
@@ -405,11 +561,11 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
 
       {/* Visual Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <AudiogramChart responses={report.frequencyTest.responses} />
+        <AudiogramChart responses={report.frequencyTest?.responses || report.leftEarResult?.responses || report.rightEarResult?.responses || []} />
         <AccuracyBarChart
-          repAccuracy={report.repetitionTest.accuracyPercentage}
-          misheardAccuracy={report.misheardTest.accuracyPercentage}
-          freqAccuracy={report.frequencyTest.detectionPercentage}
+          repAccuracy={report.repetitionTest?.accuracyPercentage ?? 0}
+          misheardAccuracy={report.misheardTest?.accuracyPercentage ?? 0}
+          freqAccuracy={report.frequencyTest?.detectionPercentage ?? (report.leftEarResult?.frequencyDetectionPercentage || report.rightEarResult?.frequencyDetectionPercentage || 0)}
         />
       </div>
 

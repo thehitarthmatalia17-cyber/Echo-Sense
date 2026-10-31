@@ -65,13 +65,15 @@ class FrequencyTestResult(BaseModel):
 
 class CompleteScreeningSubmission(BaseModel):
     user_id: str
-    repetition_test: RepetitionTestResult
-    misheard_test: MisheardTestResult
-    frequency_test: FrequencyTestResult
+    repetition_test: Optional[Dict[str, Any]] = None
+    misheard_test: Optional[Dict[str, Any]] = None
+    frequency_test: Optional[Dict[str, Any]] = None
     test_id: Optional[str] = None
     tested_ear: Optional[str] = "both"
     left_ear_result: Optional[EarScreeningSchema] = None
     right_ear_result: Optional[EarScreeningSchema] = None
+    skipped_tests: Optional[List[str]] = Field(default_factory=list)
+    test_statuses: Optional[Dict[str, str]] = Field(default_factory=dict)
 
 class ScreeningReport(BaseModel):
     id: str
@@ -84,9 +86,11 @@ class ScreeningReport(BaseModel):
     tested_ear: Optional[str] = "both"
     left_ear_result: Optional[EarScreeningSchema] = None
     right_ear_result: Optional[EarScreeningSchema] = None
-    repetition_test: RepetitionTestResult
-    misheard_test: MisheardTestResult
-    frequency_test: FrequencyTestResult
+    repetition_test: Optional[Dict[str, Any]] = None
+    misheard_test: Optional[Dict[str, Any]] = None
+    frequency_test: Optional[Dict[str, Any]] = None
+    skipped_tests: Optional[List[str]] = Field(default_factory=list)
+    test_statuses: Optional[Dict[str, str]] = Field(default_factory=dict)
     detected_frequency_ranges: List[str]
     missed_frequency_ranges: List[str]
     concern_level: str  # LOW, MODERATE, HIGH

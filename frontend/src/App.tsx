@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   UserProfile,
   LanguageCode,
@@ -11,6 +11,8 @@ import {
 } from './types';
 import { translations } from './i18n/translations';
 import { api } from './services/api';
+import { audioService } from './services/audioService';
+import { speechService } from './services/speechService';
 import { Navbar } from './components/Navbar';
 import { ProgressBar } from './components/ProgressBar';
 import { Modal } from './components/Modal';
@@ -23,6 +25,7 @@ import { RegistrationPage } from './pages/RegistrationPage';
 import { TestRepetitionPage } from './pages/TestRepetitionPage';
 import { TestMisheardPage } from './pages/TestMisheardPage';
 import { TestFrequencyPage } from './pages/TestFrequencyPage';
+import { TestIndividualEarPage } from './pages/TestIndividualEarPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { BehavioralMonitoringPage } from './pages/BehavioralMonitoringPage';
@@ -36,7 +39,13 @@ export function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Sequential Screening Step:
-  // 1: Registration, 2: Ear Selection, 3: Test 1 (Repetition), 4: Test 2 (Word Contrast), 5: Test 3 (Frequency), 6: Results Report
+  // 1: Registration
+  // 2: Ear Selection / Calibration Mode
+  // 3: Test 1 (Sentence Repetition)
+  // 4: Test 2 (Word Contrast)
+  // 5: Test 3 (Pure Tone Frequency)
+  // 6: Test 4 (Individual Ear Assessment: Left & Right Ear)
+  // 7: Final Comprehensive Results Report
   const [screeningStep, setScreeningStep] = useState<number>(1);
 
   // Ear Testing Mode ('left' | 'right' | 'both')
@@ -45,17 +54,31 @@ export function App() {
   // Track if user launched a standalone test vs full sequence
   const [activeStandaloneTest, setActiveStandaloneTest] = useState<'test1' | 'test2' | 'test3' | 'ear_assessment' | null>(null);
 
-  // Test Summaries
+  // Test Summaries & Results
   const [test1Summary, setTest1Summary] = useState<RepetitionTestSummary | null>(null);
   const [test2Summary, setTest2Summary] = useState<MisheardTestSummary | null>(null);
   const [test3Summary, setTest3Summary] = useState<FrequencyTestSummary | null>(null);
+  const [test4LeftResult, setTest4LeftResult] = useState<EarScreeningResult | null>(null);
+  const [test4RightResult, setTest4RightResult] = useState<EarScreeningResult | null>(null);
+
+  // Skipped tracking & statuses
+  const [skippedTests, setSkippedTests] = useState<string[]>([]);
+  const [testStatuses, setTestStatuses] = useState<Record<string, 'completed' | 'skipped' | 'not_taken'>>({
+    test1: 'not_taken',
+    test2: 'not_taken',
+    test3: 'not_taken',
+    test4: 'not_taken',
+  });
+
   const [screeningReport, setScreeningReport] = useState<ScreeningReportData | null>(null);
+  const [isSubmittingReport, setIsSubmittingReport] = useState<boolean>(false);
+  const isSubmittingRef = useRef<boolean>(false);
 
   // Exit & Restart Modals
   const [showExitConfirmModal, setShowExitConfirmModal] = useState<boolean>(false);
   const [showRestartConfirmModal, setShowRestartConfirmModal] = useState<boolean>(false);
 
-  // Initialize from LocalStorage
+  // 1. Initialize from LocalStorage (User Profile and Active In-Progress Assessment Session)
   useEffect(() => {
     const savedUser = localStorage.getItem('echosense_user');
     if (savedUser) {
@@ -69,7 +92,61 @@ export function App() {
         // Ignored
       }
     }
+
+    const savedState = localStorage.getItem('echosense_active_assessment_state');
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        if (parsed.screeningStep && parsed.screeningStep < 7) {
+          setScreeningStep(parsed.screeningStep);
+        }
+        if (parsed.activeTab) setActiveTab(parsed.activeTab);
+        if (parsed.testedEarMode) setTestedEarMode(parsed.testedEarMode);
+        if (parsed.activeStandaloneTest !== undefined) setActiveStandaloneTest(parsed.activeStandaloneTest);
+        if (parsed.test1Summary) setTest1Summary(parsed.test1Summary);
+        if (parsed.test2Summary) setTest2Summary(parsed.test2Summary);
+        if (parsed.test3Summary) setTest3Summary(parsed.test3Summary);
+        if (parsed.test4LeftResult) setTest4LeftResult(parsed.test4LeftResult);
+        if (parsed.test4RightResult) setTest4RightResult(parsed.test4RightResult);
+        if (parsed.skippedTests) setSkippedTests(parsed.skippedTests);
+        if (parsed.testStatuses) setTestStatuses(parsed.testStatuses);
+      } catch (e) {
+        // Ignored
+      }
+    }
   }, []);
+
+  // 2. Persist in-progress active assessment session state to localStorage on every state change
+  useEffect(() => {
+    if (activeTab === 'screening' && screeningStep > 1 && screeningStep < 7) {
+      const stateToSave = {
+        screeningStep,
+        activeTab,
+        testedEarMode,
+        activeStandaloneTest,
+        test1Summary,
+        test2Summary,
+        test3Summary,
+        test4LeftResult,
+        test4RightResult,
+        skippedTests,
+        testStatuses,
+      };
+      localStorage.setItem('echosense_active_assessment_state', JSON.stringify(stateToSave));
+    }
+  }, [
+    activeTab,
+    screeningStep,
+    testedEarMode,
+    activeStandaloneTest,
+    test1Summary,
+    test2Summary,
+    test3Summary,
+    test4LeftResult,
+    test4RightResult,
+    skippedTests,
+    testStatuses,
+  ]);
 
   const handleLanguageChange = (lang: LanguageCode) => {
     setCurrentLanguage(lang);
@@ -80,6 +157,8 @@ export function App() {
 
   // Launch assessment from Landing Page -> Directs to the dedicated 4-Test Selection Page
   const handleStartAssessment = () => {
+    audioService.stopAll();
+    speechService.stopAll();
     setActiveTab('tests');
   };
 
@@ -88,6 +167,9 @@ export function App() {
     testType: 'test1' | 'test2' | 'test3' | 'ear_assessment' | 'full_sequence',
     earMode?: EarMode
   ) => {
+    audioService.stopAll();
+    speechService.stopAll();
+
     if (testType === 'full_sequence') {
       setActiveStandaloneTest(null);
       setTestedEarMode('both');
@@ -108,7 +190,7 @@ export function App() {
       if (!userProfile) {
         setScreeningStep(1); // Registration
       } else {
-        setScreeningStep(5); // Jump directly to Pure Tone Frequency Test with unilateral audio panning + pink noise masking
+        setScreeningStep(6); // Step 6: Individual Ear Assessment
       }
       return;
     }
@@ -156,7 +238,9 @@ export function App() {
     setUserProfile(registered);
     setCurrentLanguage(registered.preferredLanguage);
 
-    if (activeStandaloneTest === 'ear_assessment' || activeStandaloneTest === 'test3') {
+    if (activeStandaloneTest === 'ear_assessment') {
+      setScreeningStep(6); // Individual Ear Assessment
+    } else if (activeStandaloneTest === 'test3') {
       setScreeningStep(5); // Pure Tone Frequency Test
     } else if (activeStandaloneTest === 'test2') {
       setScreeningStep(4); // Word Contrast Test
@@ -169,117 +253,248 @@ export function App() {
 
   // Step 2 Complete: Ear Selected -> Advance to Test 1
   const handleEarConfirmed = () => {
+    audioService.stopAll();
+    speechService.stopAll();
     setScreeningStep(3); // Advance to Test 1 (Repetition)
   };
 
-  // Step 3 Complete: Test 1 Repetition Detection
-  const handleTest1Complete = (summary: RepetitionTestSummary) => {
-    setTest1Summary(summary);
-    setScreeningStep(4); // Advance to Test 2 (Word Contrast)
-  };
+  // Final Report Generation and Submission
+  const submitAndGenerateReport = async (overrides?: {
+    rep?: RepetitionTestSummary | null;
+    mish?: MisheardTestSummary | null;
+    freq?: FrequencyTestSummary | null;
+    leftRes?: EarScreeningResult | null;
+    rightRes?: EarScreeningResult | null;
+    skipped?: string[];
+    statuses?: Record<string, 'completed' | 'skipped' | 'not_taken'>;
+  }) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmittingReport(true);
 
-  // Step 4 Complete: Test 2 Misheard Word Detection
-  const handleTest2Complete = (summary: MisheardTestSummary) => {
-    setTest2Summary(summary);
-    setScreeningStep(5); // Advance to Test 3 (Pure Tone Frequency)
-  };
-
-  // Step 5 Complete: Test 3 Frequency Recognition -> Generates Final Report
-  const handleTest3Complete = async (summary: FrequencyTestSummary) => {
-    setTest3Summary(summary);
-
-    const leftEarResult: EarScreeningResult | undefined = (testedEarMode === 'left' || testedEarMode === 'both') ? {
-      ear: 'left',
-      frequencyDetectionPercentage: summary.detectionPercentage,
-      detectedTones: summary.detectedTones,
-      missedTones: summary.missedTones,
-      totalTones: summary.totalTones,
-      responses: summary.responses,
-      hearingStatus: summary.detectionPercentage >= 80 ? 'Normal Sensitivity (Screening)' : 'Elevated Threshold Indicator',
-      averageEstimatedDbHl: summary.detectionPercentage >= 80 ? 15 : 35,
-      frequenciesTested: [250, 500, 1000, 2000, 4000, 6000, 8000, 12000],
-    } : undefined;
-
-    const rightEarResult: EarScreeningResult | undefined = (testedEarMode === 'right' || testedEarMode === 'both') ? {
-      ear: 'right',
-      frequencyDetectionPercentage: summary.detectionPercentage,
-      detectedTones: summary.detectedTones,
-      missedTones: summary.missedTones,
-      totalTones: summary.totalTones,
-      responses: summary.responses,
-      hearingStatus: summary.detectionPercentage >= 80 ? 'Normal Sensitivity (Screening)' : 'Elevated Threshold Indicator',
-      averageEstimatedDbHl: summary.detectionPercentage >= 80 ? 15 : 35,
-      frequenciesTested: [250, 500, 1000, 2000, 4000, 6000, 8000, 12000],
-    } : undefined;
-
-    const repSummary: RepetitionTestSummary = test1Summary || {
-      totalQuestions: 4,
-      correctAnswers: 4,
-      incorrectAnswers: 0,
-      totalRepetitions: 0,
-      accuracyPercentage: 100.0,
-      stageBreakdown: [],
-    };
-
-    const mishSummary: MisheardTestSummary = test2Summary || {
-      totalWords: 5,
-      correctlyRecognized: ['Ship', 'Van', 'Thin', 'Pat'],
-      incorrectlyRecognized: ['Cab'],
-      totalAttempts: 5,
-      accuracyPercentage: 80.0,
-      categoryPerformance: {},
-      beneficialAssessmentAreas: ['Voiced vs Voiceless Consonants'],
-    };
+    const rep = overrides?.rep !== undefined ? overrides.rep : test1Summary;
+    const mish = overrides?.mish !== undefined ? overrides.mish : test2Summary;
+    const freq = overrides?.freq !== undefined ? overrides.freq : test3Summary;
+    const leftRes = overrides?.leftRes !== undefined ? overrides.leftRes : test4LeftResult;
+    const rightRes = overrides?.rightRes !== undefined ? overrides.rightRes : test4RightResult;
+    const skipped = overrides?.skipped !== undefined ? overrides.skipped : skippedTests;
+    const statuses = overrides?.statuses !== undefined ? overrides.statuses : testStatuses;
 
     const targetUserId = userProfile?.id || 'anonymous-user';
     try {
       const report = await api.submitScreening(
         targetUserId,
-        repSummary,
-        mishSummary,
-        summary,
+        rep,
+        mish,
+        freq,
         testedEarMode,
-        leftEarResult,
-        rightEarResult
+        leftRes || undefined,
+        rightRes || undefined,
+        skipped,
+        statuses
       );
       setScreeningReport(report);
     } catch (err) {
       console.warn("Failed to submit screening report:", err);
+    } finally {
+      setIsSubmittingReport(false);
+      isSubmittingRef.current = false;
+      setScreeningStep(7); // Show Final Comprehensive Results Page
+      localStorage.removeItem('echosense_active_assessment_state');
     }
-    setScreeningStep(6); // Show Final Comprehensive Results Page
+  };
+
+  // Step 3 Complete: Test 1 Repetition Detection
+  const handleTest1Complete = (summary: RepetitionTestSummary) => {
+    audioService.stopAll();
+    speechService.stopAll();
+    setTest1Summary(summary);
+    const updatedStatuses = { ...testStatuses, test1: 'completed' as const };
+    setTestStatuses(updatedStatuses);
+
+    if (activeStandaloneTest === 'test1') {
+      submitAndGenerateReport({
+        rep: summary,
+        statuses: updatedStatuses,
+      });
+    } else {
+      setScreeningStep(4); // Advance to Test 2 (Word Contrast)
+    }
+  };
+
+  // Step 4 Complete: Test 2 Misheard Word Detection
+  const handleTest2Complete = (summary: MisheardTestSummary) => {
+    audioService.stopAll();
+    speechService.stopAll();
+    setTest2Summary(summary);
+    const updatedStatuses = { ...testStatuses, test2: 'completed' as const };
+    setTestStatuses(updatedStatuses);
+
+    if (activeStandaloneTest === 'test2') {
+      submitAndGenerateReport({
+        mish: summary,
+        statuses: updatedStatuses,
+      });
+    } else {
+      setScreeningStep(5); // Advance to Test 3 (Pure Tone Frequency)
+    }
+  };
+
+  // Step 5 Complete: Test 3 Frequency Recognition
+  const handleTest3Complete = (summary: FrequencyTestSummary) => {
+    audioService.stopAll();
+    speechService.stopAll();
+    setTest3Summary(summary);
+    const updatedStatuses = { ...testStatuses, test3: 'completed' as const };
+    setTestStatuses(updatedStatuses);
+
+    if (activeStandaloneTest === 'test3') {
+      submitAndGenerateReport({
+        freq: summary,
+        statuses: updatedStatuses,
+      });
+    } else {
+      setScreeningStep(6); // Advance to Test 4 (Individual Ear Assessment)
+    }
+  };
+
+  // Step 6 Complete: Test 4 Individual Ear Assessment
+  const handleTest4Complete = (leftRes?: EarScreeningResult, rightRes?: EarScreeningResult) => {
+    audioService.stopAll();
+    speechService.stopAll();
+    if (leftRes) setTest4LeftResult(leftRes);
+    if (rightRes) setTest4RightResult(rightRes);
+    const updatedStatuses = { ...testStatuses, test4: 'completed' as const };
+    setTestStatuses(updatedStatuses);
+
+    submitAndGenerateReport({
+      leftRes: leftRes || test4LeftResult,
+      rightRes: rightRes || test4RightResult,
+      statuses: updatedStatuses,
+    });
+  };
+
+  // Skip Test Handler for any active test
+  const handleSkipTest = (testKey: 'test1' | 'test2' | 'test3' | 'test4') => {
+    audioService.stopAll();
+    speechService.stopAll();
+
+    if (testKey === 'test1') {
+      setTest1Summary(null);
+      const updatedSkipped = [...skippedTests.filter(t => t !== 'Sentence Repetition (Test 1)'), 'Sentence Repetition (Test 1)'];
+      const updatedStatuses = { ...testStatuses, test1: 'skipped' as const };
+      setSkippedTests(updatedSkipped);
+      setTestStatuses(updatedStatuses);
+
+      if (activeStandaloneTest === 'test1') {
+        submitAndGenerateReport({
+          rep: null,
+          skipped: updatedSkipped,
+          statuses: updatedStatuses,
+        });
+      } else {
+        setScreeningStep(4); // Advance to Test 2
+      }
+    } else if (testKey === 'test2') {
+      setTest2Summary(null);
+      const updatedSkipped = [...skippedTests.filter(t => t !== 'Word Contrast (Test 2)'), 'Word Contrast (Test 2)'];
+      const updatedStatuses = { ...testStatuses, test2: 'skipped' as const };
+      setSkippedTests(updatedSkipped);
+      setTestStatuses(updatedStatuses);
+
+      if (activeStandaloneTest === 'test2') {
+        submitAndGenerateReport({
+          mish: null,
+          skipped: updatedSkipped,
+          statuses: updatedStatuses,
+        });
+      } else {
+        setScreeningStep(5); // Advance to Test 3
+      }
+    } else if (testKey === 'test3') {
+      setTest3Summary(null);
+      const updatedSkipped = [...skippedTests.filter(t => t !== 'Pure Tones (Test 3)'), 'Pure Tones (Test 3)'];
+      const updatedStatuses = { ...testStatuses, test3: 'skipped' as const };
+      setSkippedTests(updatedSkipped);
+      setTestStatuses(updatedStatuses);
+
+      if (activeStandaloneTest === 'test3') {
+        submitAndGenerateReport({
+          freq: null,
+          skipped: updatedSkipped,
+          statuses: updatedStatuses,
+        });
+      } else {
+        setScreeningStep(6); // Advance to Test 4
+      }
+    } else if (testKey === 'test4') {
+      setTest4LeftResult(null);
+      setTest4RightResult(null);
+      const updatedSkipped = [...skippedTests.filter(t => t !== 'Individual Ear Assessment (Test 4)'), 'Individual Ear Assessment (Test 4)'];
+      const updatedStatuses = { ...testStatuses, test4: 'skipped' as const };
+      setSkippedTests(updatedSkipped);
+      setTestStatuses(updatedStatuses);
+
+      // Skips 4th test -> Final Report generated immediately with skipped test clearly marked
+      submitAndGenerateReport({
+        leftRes: null,
+        rightRes: null,
+        skipped: updatedSkipped,
+        statuses: updatedStatuses,
+      });
+    }
   };
 
   // Switch to testing the opposite ear from the results page
   const handleTestOppositeEar = (oppositeEar: EarMode) => {
+    audioService.stopAll();
+    speechService.stopAll();
     setTestedEarMode(oppositeEar);
-    setTest1Summary(null);
-    setTest2Summary(null);
-    setTest3Summary(null);
-    setScreeningReport(null);
-    setScreeningStep(3); // Start directly at Test 1 for opposite ear
+    setActiveStandaloneTest('ear_assessment');
+    setScreeningStep(6); // Launch Test 4 for the opposite ear
   };
 
   // Explicit confirmation before exiting an active test session
   const handleConfirmExit = () => {
+    audioService.stopAll();
+    speechService.stopAll();
+    localStorage.removeItem('echosense_active_assessment_state');
     setScreeningStep(1);
     setTest1Summary(null);
     setTest2Summary(null);
     setTest3Summary(null);
-    setActiveTab('landing');
+    setTest4LeftResult(null);
+    setTest4RightResult(null);
+    setSkippedTests([]);
+    setTestStatuses({
+      test1: 'not_taken',
+      test2: 'not_taken',
+      test3: 'not_taken',
+      test4: 'not_taken',
+    });
+    setActiveTab('tests');
   };
 
-  // Restart / Clear session button handler
+  // Restart session button handler (clears temporary active state, keeps History permanent)
   const handleRestartSession = async () => {
-    if (userProfile?.id) {
-      await api.resetSession(userProfile.id);
-    }
-    setUserProfile(null);
+    audioService.stopAll();
+    speechService.stopAll();
+    localStorage.removeItem('echosense_active_assessment_state');
     setTest1Summary(null);
     setTest2Summary(null);
     setTest3Summary(null);
+    setTest4LeftResult(null);
+    setTest4RightResult(null);
+    setSkippedTests([]);
+    setTestStatuses({
+      test1: 'not_taken',
+      test2: 'not_taken',
+      test3: 'not_taken',
+      test4: 'not_taken',
+    });
     setScreeningReport(null);
     setScreeningStep(1);
-    setActiveTab('landing');
+    setActiveTab('tests');
   };
 
   const stepLabels = [
@@ -288,7 +503,8 @@ export function App() {
     'Test 1: Repetition',
     'Test 2: Word Contrast',
     'Test 3: Pure Tones',
-    'Results Report',
+    'Test 4: Ear Assessment',
+    'Final Report',
   ];
 
   return (
@@ -307,7 +523,9 @@ export function App() {
         onLanguageChange={handleLanguageChange}
         activeTab={activeTab}
         onTabChange={(tab) => {
-          if (activeTab === 'screening' && screeningStep > 2 && screeningStep < 6 && tab !== 'screening') {
+          audioService.stopAll();
+          speechService.stopAll();
+          if (activeTab === 'screening' && screeningStep > 2 && screeningStep < 7 && tab !== 'screening') {
             setShowExitConfirmModal(true);
           } else {
             setActiveTab(tab);
@@ -325,11 +543,15 @@ export function App() {
           <LandingPage
             currentLanguage={currentLanguage}
             onStartAssessment={handleStartAssessment}
-            onExploreFeatures={(tab) => setActiveTab(tab)}
+            onExploreFeatures={(tab) => {
+              audioService.stopAll();
+              speechService.stopAll();
+              setActiveTab(tab);
+            }}
           />
         )}
 
-        {/* Hearing Tests Selection Page (4 Available Testing Options) */}
+        {/* Hearing Tests Selection Page (All 4 Available Testing Options) */}
         {activeTab === 'tests' && (
           <HearingTestsPage
             currentLanguage={currentLanguage}
@@ -342,7 +564,7 @@ export function App() {
         {activeTab === 'screening' && (
           <div className="pt-6 sm:pt-8">
             
-            {/* Sequential Progress Stepper */}
+            {/* Sequential Progress Stepper (7 Steps) */}
             <ProgressBar currentStep={screeningStep} stepLabels={stepLabels} />
 
             {/* Step 1: Registration Page */}
@@ -369,8 +591,12 @@ export function App() {
               <TestRepetitionPage
                 currentLanguage={currentLanguage}
                 activeEar={testedEarMode}
+                testNumber={1}
+                totalTests={4}
                 onComplete={handleTest1Complete}
+                onSkip={() => handleSkipTest('test1')}
                 onExitRequest={() => setShowExitConfirmModal(true)}
+                onNextTest={() => setScreeningStep(4)}
               />
             )}
 
@@ -379,8 +605,12 @@ export function App() {
               <TestMisheardPage
                 currentLanguage={currentLanguage}
                 activeEar={testedEarMode}
+                testNumber={2}
+                totalTests={4}
                 onComplete={handleTest2Complete}
+                onSkip={() => handleSkipTest('test2')}
                 onExitRequest={() => setShowExitConfirmModal(true)}
+                onNextTest={() => setScreeningStep(5)}
               />
             )}
 
@@ -389,81 +619,58 @@ export function App() {
               <TestFrequencyPage
                 currentLanguage={currentLanguage}
                 activeEar={testedEarMode}
+                testNumber={3}
+                totalTests={4}
                 onComplete={handleTest3Complete}
+                onSkip={() => handleSkipTest('test3')}
+                onExitRequest={() => setShowExitConfirmModal(true)}
+                onNextTest={() => setScreeningStep(6)}
+              />
+            )}
+
+            {/* Step 6: Test 4 Individual Ear Assessment */}
+            {screeningStep === 6 && (
+              <TestIndividualEarPage
+                currentLanguage={currentLanguage}
+                initialEar={testedEarMode === 'right' ? 'right' : 'left'}
+                testNumber={4}
+                totalTests={4}
+                onComplete={(leftRes, rightRes) => handleTest4Complete(leftRes, rightRes)}
+                onSkip={() => handleSkipTest('test4')}
                 onExitRequest={() => setShowExitConfirmModal(true)}
               />
             )}
 
-            {/* Step 6: Final Comprehensive Results Page */}
-            {screeningStep === 6 && (
+            {/* Step 7: Final Comprehensive Results Page */}
+            {screeningStep === 7 && (
               <div className="space-y-6">
                 <ResultsPage
                   report={
                     screeningReport || {
-                      id: 'temp-report',
+                      id: 'report-' + Date.now(),
                       testId: `ES-${Date.now().toString(36).toUpperCase()}`,
                       userId: userProfile?.id || 'default-user',
                       userName: userProfile?.fullName || 'User',
-                      age: userProfile?.age || 35,
+                      age: userProfile?.age || 30,
                       preferredLanguage: currentLanguage,
                       timestamp: new Date().toISOString(),
                       testedEar: testedEarMode,
-                      leftEarResult: (testedEarMode === 'left' || testedEarMode === 'both') ? {
-                        ear: 'left',
-                        frequencyDetectionPercentage: test3Summary?.detectionPercentage || 85,
-                        detectedTones: test3Summary?.detectedTones || 7,
-                        missedTones: test3Summary?.missedTones || 1,
-                        totalTones: test3Summary?.totalTones || 8,
-                        responses: test3Summary?.responses || [],
-                        hearingStatus: 'Normal Sensitivity (Screening)',
-                        averageEstimatedDbHl: 18,
-                        frequenciesTested: [250, 500, 1000, 2000, 4000, 6000, 8000, 12000],
-                      } : undefined,
-                      rightEarResult: (testedEarMode === 'right' || testedEarMode === 'both') ? {
-                        ear: 'right',
-                        frequencyDetectionPercentage: test3Summary?.detectionPercentage || 85,
-                        detectedTones: test3Summary?.detectedTones || 7,
-                        missedTones: test3Summary?.missedTones || 1,
-                        totalTones: test3Summary?.totalTones || 8,
-                        responses: test3Summary?.responses || [],
-                        hearingStatus: 'Normal Sensitivity (Screening)',
-                        averageEstimatedDbHl: 18,
-                        frequenciesTested: [250, 500, 1000, 2000, 4000, 6000, 8000, 12000],
-                      } : undefined,
-                      repetitionTest: test1Summary || {
-                        totalQuestions: 4,
-                        correctAnswers: 4,
-                        incorrectAnswers: 0,
-                        totalRepetitions: 1,
-                        accuracyPercentage: 100.0,
-                        stageBreakdown: [],
-                      },
-                      misheardTest: test2Summary || {
-                        totalWords: 5,
-                        correctlyRecognized: ['Ship', 'Van', 'Thin', 'Pat'],
-                        incorrectlyRecognized: ['Cab'],
-                        totalAttempts: 6,
-                        accuracyPercentage: 80.0,
-                        categoryPerformance: {},
-                        beneficialAssessmentAreas: ['Voiced vs Voiceless Consonants'],
-                      },
-                      frequencyTest: test3Summary || {
-                        totalTones: 8,
-                        detectedTones: 7,
-                        missedTones: 1,
-                        detectionPercentage: 88.0,
-                        responses: [],
-                        categorySummary: {},
-                      },
-                      detectedFrequencyRanges: ['Low Frequencies (250–500 Hz)', 'Mid Speech Band (1,000–4,000 Hz)'],
+                      leftEarResult: test4LeftResult || undefined,
+                      rightEarResult: test4RightResult || undefined,
+                      repetitionTest: test1Summary || null,
+                      misheardTest: test2Summary || null,
+                      frequencyTest: test3Summary || null,
+                      skippedTests: skippedTests,
+                      testStatuses: testStatuses,
+                      detectedFrequencyRanges: ['Speech Frequency Band (250–4,000 Hz)'],
                       missedFrequencyRanges: [],
                       concernLevel: 'LOW',
                       concernReason:
-                        'No significant concern identified during this screening session. Your responses were consistent across the tested speech bands and frequency ranges.',
+                        'Preliminary hearing assessment completed. Your responses were evaluated only on tests completed during this session.',
                       disclaimer:
                         'These tests are experimental and are not medically validated diagnostic procedures. EchoSense only provides preliminary hearing-related screening observations.',
                       thankYouMessage:
-                        'Thank you for choosing EchoSense. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
+                        'Thank you for using EchoSense. Continue monitoring your hearing and consult a certified audiologist or physician for comprehensive evaluation.',
                     }
                   }
                   currentLanguage={currentLanguage}
@@ -486,7 +693,7 @@ export function App() {
 
                       <button
                         onClick={() => handleTestOppositeEar(testedEarMode === 'left' ? 'right' : 'left')}
-                        className="w-full sm:w-auto px-6 py-3 bg-[#FFC700] hover:bg-[#E5B200] text-black font-black uppercase text-xs tracking-wider border-2 border-black shadow-brutal-xs hover:translate-x-0.5 hover:translate-y-0.5 transition-all rounded-xl"
+                        className="w-full sm:w-auto px-6 py-3 bg-[#FFC700] hover:bg-[#E5B200] text-black font-black uppercase text-xs tracking-wider border-2 border-black shadow-brutal-xs hover:translate-x-0.5 hover:translate-y-0.5 transition-all rounded-xl cursor-pointer"
                       >
                         TEST {testedEarMode === 'left' ? 'RIGHT' : 'LEFT'} EAR NOW
                       </button>

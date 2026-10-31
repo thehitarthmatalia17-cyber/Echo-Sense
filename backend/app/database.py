@@ -154,15 +154,19 @@ class Database:
         timestamp = datetime.utcnow().isoformat()
         user_id = screening_data["user_id"]
         
-        # Package ear details into frequency_data for robust backward-compatible serialization
-        freq_dict = dict(screening_data["frequency_test"])
+        # Package ear details & skipped test indicators into frequency_data for robust backward-compatible serialization
+        freq_dict = dict(screening_data.get("frequency_test") or {})
         if "tested_ear" in screening_data:
             freq_dict["tested_ear"] = screening_data["tested_ear"]
         if "left_ear_result" in screening_data:
             freq_dict["left_ear_result"] = screening_data["left_ear_result"]
         if "right_ear_result" in screening_data:
             freq_dict["right_ear_result"] = screening_data["right_ear_result"]
-        if "test_id" in screening_data:
+        if "skipped_tests" in screening_data:
+            freq_dict["skipped_tests"] = screening_data["skipped_tests"]
+        if "test_statuses" in screening_data:
+            freq_dict["test_statuses"] = screening_data["test_statuses"]
+        if "test_id" in screening_data and screening_data["test_id"]:
             freq_dict["test_id"] = screening_data["test_id"]
         else:
             freq_dict["test_id"] = f"ES-{screening_id[:8].upper()}"
@@ -221,11 +225,13 @@ class Database:
             rows = cursor.fetchall()
             results = []
             for r in rows:
-                freq_json = json.loads(r["frequency_data"])
+                freq_json = json.loads(r["frequency_data"]) if r["frequency_data"] else {}
                 tested_ear = freq_json.get("tested_ear", "both")
                 left_ear_result = freq_json.get("left_ear_result")
                 right_ear_result = freq_json.get("right_ear_result")
                 test_id = freq_json.get("test_id", f"ES-{r['id'][:8].upper()}")
+                skipped_tests = freq_json.get("skipped_tests", [])
+                test_statuses = freq_json.get("test_statuses", {})
 
                 results.append({
                     "id": r["id"],
@@ -235,13 +241,15 @@ class Database:
                     "tested_ear": tested_ear,
                     "left_ear_result": left_ear_result,
                     "right_ear_result": right_ear_result,
-                    "repetition_test": json.loads(r["repetition_data"]),
-                    "misheard_test": json.loads(r["misheard_data"]),
+                    "repetition_test": json.loads(r["repetition_data"]) if r["repetition_data"] else None,
+                    "misheard_test": json.loads(r["misheard_data"]) if r["misheard_data"] else None,
                     "frequency_test": freq_json,
+                    "skipped_tests": skipped_tests,
+                    "test_statuses": test_statuses,
                     "concern_level": r["concern_level"],
                     "concern_reason": r["concern_reason"],
-                    "detected_frequency_ranges": json.loads(r["detected_ranges"]),
-                    "missed_frequency_ranges": json.loads(r["missed_ranges"])
+                    "detected_frequency_ranges": json.loads(r["detected_ranges"]) if r["detected_ranges"] else [],
+                    "missed_frequency_ranges": json.loads(r["missed_ranges"]) if r["missed_ranges"] else []
                 })
             return results
 

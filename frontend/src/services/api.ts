@@ -84,62 +84,74 @@ class ApiService {
   // Screening Endpoints
   public async submitScreening(
     userId: string,
-    repetition: RepetitionTestSummary,
-    misheard: MisheardTestSummary,
-    frequency: FrequencyTestSummary,
+    repetition?: RepetitionTestSummary | null,
+    misheard?: MisheardTestSummary | null,
+    frequency?: FrequencyTestSummary | null,
     testedEar: 'left' | 'right' | 'both' = 'both',
     leftEarResult?: any,
-    rightEarResult?: any
+    rightEarResult?: any,
+    skippedTests: string[] = [],
+    testStatuses: Record<string, 'completed' | 'skipped' | 'not_taken'> = {},
+    customTestId?: string
   ): Promise<ScreeningReportData> {
-    const generatedTestId = `ES-${Date.now().toString(36).toUpperCase()}`;
+    const generatedTestId = customTestId || `ES-${Date.now().toString(36).toUpperCase()}`;
+
+    const repPayload = repetition ? {
+      total_questions: repetition.totalQuestions,
+      correct_answers: repetition.correctAnswers,
+      incorrect_answers: repetition.incorrectAnswers,
+      total_repetitions: repetition.totalRepetitions,
+      accuracy_percentage: repetition.accuracyPercentage,
+      stage_breakdown: repetition.stageBreakdown.map((s) => ({
+        stage_id: s.stageId,
+        stage_name: s.stageName,
+        frequency_range: s.frequencyRange,
+        target_text: s.targetText,
+        user_response: s.userResponse,
+        repetitions_count: s.repetitionsCount,
+        is_correct: s.isCorrect,
+      })),
+    } : null;
+
+    const misPayload = misheard ? {
+      total_words: misheard.totalWords,
+      correctly_recognized: misheard.correctlyRecognized,
+      incorrectly_recognized: misheard.incorrectlyRecognized,
+      total_attempts: misheard.totalAttempts,
+      accuracy_percentage: misheard.accuracyPercentage,
+      category_performance: misheard.categoryPerformance,
+      beneficial_assessment_areas: misheard.beneficialAssessmentAreas,
+    } : null;
+
+    const freqPayload = frequency ? {
+      total_tones: frequency.totalTones,
+      detected_tones: frequency.detectedTones,
+      missed_tones: frequency.missedTones,
+      detection_percentage: frequency.detectionPercentage,
+      tested_ear: testedEar,
+      left_ear_result: leftEarResult,
+      right_ear_result: rightEarResult,
+      responses: frequency.responses.map((r) => ({
+        frequency_hz: r.frequencyHz,
+        category: r.category,
+        heard: r.heard,
+        ear: r.ear || testedEar,
+        estimated_db_hl: r.estimatedDbHl,
+      })),
+      category_summary: frequency.categorySummary,
+    } : null;
+
     const payload = {
       user_id: userId,
       test_id: generatedTestId,
       tested_ear: testedEar,
       left_ear_result: leftEarResult,
       right_ear_result: rightEarResult,
-      repetition_test: {
-        total_questions: repetition.totalQuestions,
-        correct_answers: repetition.correctAnswers,
-        incorrect_answers: repetition.incorrectAnswers,
-        total_repetitions: repetition.totalRepetitions,
-        accuracy_percentage: repetition.accuracyPercentage,
-        stage_breakdown: repetition.stageBreakdown.map((s) => ({
-          stage_id: s.stageId,
-          stage_name: s.stageName,
-          frequency_range: s.frequencyRange,
-          target_text: s.targetText,
-          user_response: s.userResponse,
-          repetitions_count: s.repetitionsCount,
-          is_correct: s.isCorrect,
-        })),
-      },
-      misheard_test: {
-        total_words: misheard.totalWords,
-        correctly_recognized: misheard.correctlyRecognized,
-        incorrectly_recognized: misheard.incorrectlyRecognized,
-        total_attempts: misheard.totalAttempts,
-        accuracy_percentage: misheard.accuracyPercentage,
-        category_performance: misheard.categoryPerformance,
-        beneficial_assessment_areas: misheard.beneficialAssessmentAreas,
-      },
-      frequency_test: {
-        total_tones: frequency.totalTones,
-        detected_tones: frequency.detectedTones,
-        missed_tones: frequency.missedTones,
-        detection_percentage: frequency.detectionPercentage,
-        tested_ear: testedEar,
-        left_ear_result: leftEarResult,
-        right_ear_result: rightEarResult,
-        responses: frequency.responses.map((r) => ({
-          frequency_hz: r.frequencyHz,
-          category: r.category,
-          heard: r.heard,
-          ear: r.ear || testedEar,
-          estimated_db_hl: r.estimatedDbHl,
-        })),
-        category_summary: frequency.categorySummary,
-      },
+      repetition_test: repPayload,
+      misheard_test: misPayload,
+      frequency_test: freqPayload,
+      skipped_tests: skippedTests,
+      test_statuses: testStatuses,
     };
 
     try {
@@ -159,11 +171,13 @@ class ApiService {
         testedEar,
         leftEarResult: leftEarResult || res.left_ear_result,
         rightEarResult: rightEarResult || res.right_ear_result,
-        repetitionTest: repetition,
-        misheardTest: misheard,
-        frequencyTest: frequency,
-        detectedFrequencyRanges: res.detected_frequency_ranges,
-        missedFrequencyRanges: res.missed_frequency_ranges,
+        repetitionTest: repetition || null,
+        misheardTest: misheard || null,
+        frequencyTest: frequency || null,
+        skippedTests: res.skipped_tests || skippedTests,
+        testStatuses: res.test_statuses || testStatuses,
+        detectedFrequencyRanges: res.detected_frequency_ranges || [],
+        missedFrequencyRanges: res.missed_frequency_ranges || [],
         concernLevel: res.concern_level,
         concernReason: res.concern_reason,
         disclaimer: res.disclaimer,
@@ -175,16 +189,30 @@ class ApiService {
 
       return report;
     } catch (e) {
-      // Dynamic local calculation fallback
-      const missedCount = frequency.missedTones;
+      // Dynamic local calculation fallback when offline
       let concern: 'LOW' | 'MODERATE' | 'HIGH' = 'LOW';
-      let reason = 'No significant concern identified by this session. Consistent responses observed across tested frequencies.';
-      if (repetition.accuracyPercentage < 60 || frequency.detectionPercentage < 60 || missedCount >= 3) {
+      let reason = 'Preliminary screening completed. Consistent responses observed across tested audio frequencies.';
+      
+      const validScores: number[] = [];
+      if (repetition && !skippedTests.includes('test1')) validScores.push(repetition.accuracyPercentage);
+      if (misheard && !skippedTests.includes('test2')) validScores.push(misheard.accuracyPercentage);
+      if (frequency && !skippedTests.includes('test3')) validScores.push(frequency.detectionPercentage);
+      if (leftEarResult && !skippedTests.includes('test4')) validScores.push(leftEarResult.frequencyDetectionPercentage);
+      if (rightEarResult && !skippedTests.includes('test4')) validScores.push(rightEarResult.frequencyDetectionPercentage);
+
+      const avgScore = validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : 100;
+      if (validScores.length === 0) {
+        reason = 'All hearing tests were skipped. No auditory responses recorded.';
+      } else if (avgScore < 60) {
         concern = 'HIGH';
         reason = 'Multiple concerning observations across speech recognition and tone tests. Professional audiological evaluation recommended.';
-      } else if (repetition.accuracyPercentage < 75 || frequency.detectionPercentage < 80 || missedCount >= 1) {
+      } else if (avgScore < 80) {
         concern = 'MODERATE';
         reason = 'Some inconsistent responses detected. Re-screening in a quieter room is recommended.';
+      }
+
+      if (skippedTests.length > 0) {
+        reason += ` Note: ${skippedTests.join(', ')} was skipped by the user.`;
       }
 
       const userObj = JSON.parse(localStorage.getItem('echosense_user') || '{}');
@@ -199,11 +227,13 @@ class ApiService {
         testedEar,
         leftEarResult,
         rightEarResult,
-        repetitionTest: repetition,
-        misheardTest: misheard,
-        frequencyTest: frequency,
-        detectedFrequencyRanges: ['Low Frequencies (250-500Hz)', 'Mid Band (1,000-4,000Hz)'],
-        missedFrequencyRanges: missedCount > 0 ? [`${missedCount} tones missed in test`] : [],
+        repetitionTest: repetition || null,
+        misheardTest: misheard || null,
+        frequencyTest: frequency || null,
+        skippedTests,
+        testStatuses,
+        detectedFrequencyRanges: ['Speech Frequency Band (250–4,000 Hz)'],
+        missedFrequencyRanges: [],
         concernLevel: concern,
         concernReason: reason,
         disclaimer:
@@ -281,6 +311,8 @@ class ApiService {
           repetitionTest: r.repetition_test,
           misheardTest: r.misheard_test,
           frequencyTest: r.frequency_test,
+          skippedTests: r.skipped_tests || [],
+          testStatuses: r.test_statuses || {},
           detectedFrequencyRanges: r.detected_frequency_ranges,
           missedFrequencyRanges: r.missed_frequency_ranges,
           concernLevel: r.concern_level,
