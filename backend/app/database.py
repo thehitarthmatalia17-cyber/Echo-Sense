@@ -152,6 +152,21 @@ class Database:
     def save_screening(self, screening_data: Dict[str, Any]) -> str:
         screening_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
+        user_id = screening_data["user_id"]
+        
+        # Package ear details into frequency_data for robust backward-compatible serialization
+        freq_dict = dict(screening_data["frequency_test"])
+        if "tested_ear" in screening_data:
+            freq_dict["tested_ear"] = screening_data["tested_ear"]
+        if "left_ear_result" in screening_data:
+            freq_dict["left_ear_result"] = screening_data["left_ear_result"]
+        if "right_ear_result" in screening_data:
+            freq_dict["right_ear_result"] = screening_data["right_ear_result"]
+        if "test_id" in screening_data:
+            freq_dict["test_id"] = screening_data["test_id"]
+        else:
+            freq_dict["test_id"] = f"TW-{screening_id[:8].upper()}"
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -162,16 +177,29 @@ class Database:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 screening_id,
-                screening_data["user_id"],
+                user_id,
                 timestamp,
                 json.dumps(screening_data["repetition_test"]),
                 json.dumps(screening_data["misheard_test"]),
-                json.dumps(screening_data["frequency_test"]),
+                json.dumps(freq_dict),
                 screening_data["concern_level"],
                 screening_data["concern_reason"],
                 json.dumps(screening_data["detected_frequency_ranges"]),
                 json.dumps(screening_data["missed_frequency_ranges"])
             ))
+
+            # STRICT FIFO SYSTEM: Maximum 10-record limitation per user
+            # Automatically delete oldest records when new test is saved
+            cursor.execute('''
+                DELETE FROM screenings
+                WHERE user_id = ?
+                AND id NOT IN (
+                    SELECT id FROM screenings
+                    WHERE user_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT 10
+                )
+            ''', (user_id, user_id))
             conn.commit()
 
         if firestore_client:
@@ -179,6 +207,7 @@ class Database:
                 screening_copy = dict(screening_data)
                 screening_copy["id"] = screening_id
                 screening_copy["timestamp"] = timestamp
+                screening_copy["test_id"] = freq_dict["test_id"]
                 firestore_client.collection("screenings").document(screening_id).set(screening_copy)
             except Exception as e:
                 print(f"Firestore screening sync error: {e}")
@@ -188,17 +217,27 @@ class Database:
     def get_user_screenings(self, user_id: str) -> List[Dict[str, Any]]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM screenings WHERE user_id = ? ORDER BY timestamp DESC", (user_id,))
+            cursor.execute("SELECT * FROM screenings WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10", (user_id,))
             rows = cursor.fetchall()
             results = []
             for r in rows:
+                freq_json = json.loads(r["frequency_data"])
+                tested_ear = freq_json.get("tested_ear", "both")
+                left_ear_result = freq_json.get("left_ear_result")
+                right_ear_result = freq_json.get("right_ear_result")
+                test_id = freq_json.get("test_id", f"TW-{r['id'][:8].upper()}")
+
                 results.append({
                     "id": r["id"],
+                    "test_id": test_id,
                     "user_id": r["user_id"],
                     "timestamp": r["timestamp"],
+                    "tested_ear": tested_ear,
+                    "left_ear_result": left_ear_result,
+                    "right_ear_result": right_ear_result,
                     "repetition_test": json.loads(r["repetition_data"]),
                     "misheard_test": json.loads(r["misheard_data"]),
-                    "frequency_test": json.loads(r["frequency_data"]),
+                    "frequency_test": freq_json,
                     "concern_level": r["concern_level"],
                     "concern_reason": r["concern_reason"],
                     "detected_frequency_ranges": json.loads(r["detected_ranges"]),

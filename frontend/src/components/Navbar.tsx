@@ -10,7 +10,8 @@ import {
   Compass,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  Clock
 } from 'lucide-react';
 import { LanguageCode } from '../types';
 import { languages, translations } from '../i18n/translations';
@@ -46,6 +47,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'screening',
       label: t.nav.screening.toUpperCase(),
       icon: Activity,
+    },
+    {
+      id: 'history',
+      label: 'HISTORY',
+      icon: Clock,
     },
     {
       id: 'behavioral',

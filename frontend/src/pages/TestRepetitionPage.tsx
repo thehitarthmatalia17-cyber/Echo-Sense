@@ -22,6 +22,7 @@ interface TestRepetitionPageProps {
   currentLanguage: LanguageCode;
   onComplete: (summary: RepetitionTestSummary) => void;
   onExitRequest: () => void;
+  activeEar?: 'left' | 'right' | 'both';
 }
 
 interface RepetitionStage {
@@ -109,6 +110,7 @@ export const TestRepetitionPage: React.FC<TestRepetitionPageProps> = ({
   currentLanguage,
   onComplete,
   onExitRequest,
+  activeEar = 'both',
 }) => {
   const t = translations[currentLanguage] || translations.en;
 
@@ -215,7 +217,8 @@ export const TestRepetitionPage: React.FC<TestRepetitionPageProps> = ({
       await audioService.playFilteredToneBeep(
         currentStage.filterType === 'allpass' ? 'lowpass' : (currentStage.filterType as BiquadFilterType),
         currentStage.filterFreq,
-        250
+        250,
+        activeEar
       );
       await speechService.speakText(currentStage.text, currentLanguage, 0.9);
     } catch (err) {
@@ -492,6 +495,25 @@ export const TestRepetitionPage: React.FC<TestRepetitionPageProps> = ({
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+
+        {/* Active Ear Identification Banner */}
+        <div className={`p-2.5 rounded-xl border-2 border-black flex items-center justify-between shadow-brutal-xs ${
+          activeEar === 'left' ? 'bg-sky-100 text-sky-950' :
+          activeEar === 'right' ? 'bg-amber-100 text-amber-950' :
+          'bg-purple-100 text-purple-950'
+        }`}>
+          <div className="flex items-center space-x-2">
+            <Headphones className="w-4 h-4 stroke-[2.5]" />
+            <span className="text-xs font-black uppercase tracking-wider">
+              {activeEar === 'left' ? '🎧 ACTIVE: LEFT EAR TEST (RIGHT EAR MASKED)' :
+               activeEar === 'right' ? '🎧 ACTIVE: RIGHT EAR TEST (LEFT EAR MASKED)' :
+               '🎧 BILATERAL TEST (BOTH EARS ACTIVE)'}
+            </span>
+          </div>
+          <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-black text-white rounded border border-black">
+            {activeEar === 'both' ? 'STEREO' : 'ISOLATED'}
+          </span>
         </div>
 
         {/* Stage Title and Frequency Badge */}

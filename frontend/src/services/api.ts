@@ -86,10 +86,18 @@ class ApiService {
     userId: string,
     repetition: RepetitionTestSummary,
     misheard: MisheardTestSummary,
-    frequency: FrequencyTestSummary
+    frequency: FrequencyTestSummary,
+    testedEar: 'left' | 'right' | 'both' = 'both',
+    leftEarResult?: any,
+    rightEarResult?: any
   ): Promise<ScreeningReportData> {
+    const generatedTestId = `TW-${Date.now().toString(36).toUpperCase()}`;
     const payload = {
       user_id: userId,
+      test_id: generatedTestId,
+      tested_ear: testedEar,
+      left_ear_result: leftEarResult,
+      right_ear_result: rightEarResult,
       repetition_test: {
         total_questions: repetition.totalQuestions,
         correct_answers: repetition.correctAnswers,
@@ -120,10 +128,15 @@ class ApiService {
         detected_tones: frequency.detectedTones,
         missed_tones: frequency.missedTones,
         detection_percentage: frequency.detectionPercentage,
+        tested_ear: testedEar,
+        left_ear_result: leftEarResult,
+        right_ear_result: rightEarResult,
         responses: frequency.responses.map((r) => ({
           frequency_hz: r.frequencyHz,
           category: r.category,
           heard: r.heard,
+          ear: r.ear || testedEar,
+          estimated_db_hl: r.estimatedDbHl,
         })),
         category_summary: frequency.categorySummary,
       },
@@ -137,11 +150,15 @@ class ApiService {
 
       const report: ScreeningReportData = {
         id: res.id,
+        testId: res.test_id || generatedTestId,
         userId: res.user_id,
         userName: res.user_name,
         age: res.age,
         preferredLanguage: res.preferred_language,
         timestamp: res.timestamp,
+        testedEar,
+        leftEarResult: leftEarResult || res.left_ear_result,
+        rightEarResult: rightEarResult || res.right_ear_result,
         repetitionTest: repetition,
         misheardTest: misheard,
         frequencyTest: frequency,
@@ -153,10 +170,8 @@ class ApiService {
         thankYouMessage: res.thank_you_message,
       };
 
-      // Save to local cache
-      const past = JSON.parse(localStorage.getItem('echosense_screenings') || '[]');
-      past.unshift(report);
-      localStorage.setItem('echosense_screenings', JSON.stringify(past));
+      // STRICT FIFO STORAGE: Store max 10 records isolated per user
+      this.saveToUserHistory(userId, report);
 
       return report;
     } catch (e) {
@@ -172,13 +187,18 @@ class ApiService {
         reason = 'Some inconsistent responses detected. Re-screening in a quieter room is recommended.';
       }
 
+      const userObj = JSON.parse(localStorage.getItem('echosense_user') || '{}');
       const report: ScreeningReportData = {
         id: 'local-' + Date.now(),
+        testId: generatedTestId,
         userId,
-        userName: JSON.parse(localStorage.getItem('echosense_user') || '{}').fullName || 'User',
-        age: JSON.parse(localStorage.getItem('echosense_user') || '{}').age || 30,
-        preferredLanguage: JSON.parse(localStorage.getItem('echosense_user') || '{}').preferredLanguage || 'en',
+        userName: userObj.fullName || 'User',
+        age: userObj.age || 30,
+        preferredLanguage: userObj.preferredLanguage || 'en',
         timestamp: new Date().toISOString(),
+        testedEar,
+        leftEarResult,
+        rightEarResult,
         repetitionTest: repetition,
         misheardTest: misheard,
         frequencyTest: frequency,
@@ -187,16 +207,94 @@ class ApiService {
         concernLevel: concern,
         concernReason: reason,
         disclaimer:
-          'These tests are experimental and are not medically validated diagnostic procedures. EchoSense only provides preliminary hearing-related screening observations. It cannot confirm or rule out hearing loss. For genuine hearing concerns, consult a qualified audiologist or healthcare professional.',
+          'These tests are experimental and are not medically validated diagnostic procedures. TunnelWay / EchoSense only provides preliminary hearing-related screening observations. It cannot confirm or rule out hearing loss. For genuine hearing concerns, consult a qualified audiologist or healthcare professional.',
         thankYouMessage:
-          'Thank you for choosing EchoSense. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
+          'Thank you for choosing TunnelWay / EchoSense. Your hearing health matters. Continue monitoring your hearing and consult a qualified professional if you experience difficulties.',
       };
 
-      const past = JSON.parse(localStorage.getItem('echosense_screenings') || '[]');
-      past.unshift(report);
-      localStorage.setItem('echosense_screenings', JSON.stringify(past));
+      // STRICT FIFO STORAGE: Store max 10 records isolated per user
+      this.saveToUserHistory(userId, report);
       return report;
     }
+  }
+
+  /**
+   * Enforces strict FIFO (First-In, First-Out) 10-record limitation per individual user.
+   * Newest record is always first at index 0.
+   * If records exceed 10, oldest records (at end) are automatically pruned.
+   */
+  public saveToUserHistory(userId: string, report: ScreeningReportData): void {
+    if (!userId) return;
+    try {
+      const storageKey = `tunnelway_history_${userId}`;
+      const existing: ScreeningReportData[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      
+      // Filter out duplicate if same ID
+      const filtered = existing.filter(r => (r.id !== report.id && r.testId !== report.testId));
+      
+      // Prepend newest test record
+      filtered.unshift(report);
+      
+      // Strict FIFO maximum 10 limitation
+      const capped = filtered.slice(0, 10);
+      localStorage.setItem(storageKey, JSON.stringify(capped));
+
+      // Also maintain general cache for backward compatibility
+      localStorage.setItem('echosense_screenings', JSON.stringify(capped));
+    } catch (err) {
+      console.warn("Failed to persist FIFO test history:", err);
+    }
+  }
+
+  /**
+   * Retrieves test history isolated for the specific user.
+   * Returns up to 10 records, newest first.
+   */
+  public async getUserHistory(userId: string): Promise<ScreeningReportData[]> {
+    if (!userId) return [];
+    
+    // Check local user cache first for instant response
+    const storageKey = `tunnelway_history_${userId}`;
+    const localHistory: ScreeningReportData[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+
+    try {
+      const res = await this.request<any[]>(`/api/screening/user/${userId}`);
+      if (Array.isArray(res) && res.length > 0) {
+        const userObj = JSON.parse(localStorage.getItem('echosense_user') || '{}');
+        const remoteHistory: ScreeningReportData[] = res.map((r) => ({
+          id: r.id,
+          testId: r.test_id || `TW-${r.id.slice(0, 8).toUpperCase()}`,
+          userId: r.user_id,
+          userName: userObj.fullName || 'User',
+          age: userObj.age || 30,
+          preferredLanguage: userObj.preferredLanguage || 'en',
+          timestamp: r.timestamp,
+          testedEar: r.tested_ear || 'both',
+          leftEarResult: r.left_ear_result,
+          rightEarResult: r.right_ear_result,
+          repetitionTest: r.repetition_test,
+          misheardTest: r.misheard_test,
+          frequencyTest: r.frequency_test,
+          detectedFrequencyRanges: r.detected_frequency_ranges,
+          missedFrequencyRanges: r.missed_frequency_ranges,
+          concernLevel: r.concern_level,
+          concernReason: r.concern_reason,
+          disclaimer:
+            'These tests are experimental screening observations. Informational use only.',
+          thankYouMessage: 'Your hearing health matters.',
+        }));
+
+        // Strict FIFO max 10
+        const capped = remoteHistory.slice(0, 10);
+        localStorage.setItem(storageKey, JSON.stringify(capped));
+        return capped;
+      }
+    } catch (e) {
+      // Offline fallback: return local FIFO history
+    }
+
+    // Return local storage fallback (max 10)
+    return localHistory.slice(0, 10);
   }
 
   public async resetSession(userId: string): Promise<void> {

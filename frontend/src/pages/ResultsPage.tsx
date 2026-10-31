@@ -22,8 +22,11 @@ import {
   Info,
   Check,
   TrendingUp,
-  Activity
+  Activity,
+  Download,
+  Headphones
 } from 'lucide-react';
+import { pdfService } from '../services/pdfService';
 
 interface ResultsPageProps {
   report: ScreeningReportData;
@@ -90,8 +93,12 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
     timeStyle: 'short',
   });
 
+  const handleDownloadPDF = () => {
+    pdfService.generateHearingReportPDF(report);
+  };
+
   const handlePrintReport = () => {
-    window.print();
+    handleDownloadPDF();
   };
 
   // Circular gauge calculations
@@ -120,16 +127,16 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
         {/* Action Buttons */}
         <div className="flex items-center space-x-2.5">
           <button
-            onClick={handlePrintReport}
-            className="inline-flex items-center space-x-2 px-4 py-3 rounded-xl bg-white hover:bg-gray-100 text-black font-black uppercase text-xs border-2 border-black shadow-brutal-sm transition-all cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+            onClick={handleDownloadPDF}
+            className="inline-flex items-center space-x-2 px-5 py-3 rounded-xl bg-[#FFC700] hover:bg-[#E5B200] text-black font-black uppercase text-xs border-2 border-black shadow-brutal transition-all cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
           >
-            <Printer className="w-4 h-4 stroke-[2.5]" />
-            <span className="hidden sm:inline">PRINT / PDF</span>
+            <Download className="w-4 h-4 stroke-[2.5]" />
+            <span>DOWNLOAD PDF REPORT</span>
           </button>
           
           <button
             onClick={() => setShowRestartModal(true)}
-            className="inline-flex items-center space-x-2 px-4 py-3 rounded-xl bg-[#FFC700] hover:bg-[#FFD233] text-black font-black uppercase text-xs border-2 border-black shadow-brutal-sm transition-all cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+            className="inline-flex items-center space-x-2 px-4 py-3 rounded-xl bg-white hover:bg-gray-100 text-black font-black uppercase text-xs border-2 border-black shadow-brutal-sm transition-all cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
           >
             <RotateCcw className="w-4 h-4 stroke-[2.5]" />
             <span>{t.results.restartButton}</span>
@@ -229,6 +236,85 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
         <p className="mt-1.5 text-xs text-gray-700 font-semibold italic">
           {badge.note}
         </p>
+      </div>
+
+      {/* Ear-Specific Auditory Metrics (Left Ear vs Right Ear) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Left Ear Performance Card */}
+        <div className="bg-sky-50/80 rounded-2xl p-5 border-2 border-black shadow-brutal">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <div className="w-3.5 h-3.5 bg-sky-500 rounded-full border border-black" />
+              <h4 className="font-black uppercase text-sky-950 text-sm">
+                Left Ear Performance (Blue [X])
+              </h4>
+            </div>
+            <span className="text-xs font-mono font-black px-2.5 py-0.5 bg-sky-200 border border-black rounded text-black">
+              {report.testedEar === 'right' ? 'NOT EVALUATED' : `${report.leftEarResult?.frequencyDetectionPercentage ?? report.frequencyTest.detectionPercentage}%`}
+            </span>
+          </div>
+
+          <div className="space-y-2 text-xs font-bold text-slate-800">
+            <div className="flex justify-between py-1 border-b border-black/10">
+              <span className="text-slate-600">Frequencies Evaluated:</span>
+              <span>250 Hz – 12,000 Hz</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-black/10">
+              <span className="text-slate-600">Pure Tone Detection:</span>
+              <span>
+                {report.testedEar === 'right' ? 'N/A' : `${report.leftEarResult?.detectedTones ?? report.frequencyTest.detectedTones} of ${report.leftEarResult?.totalTones ?? report.frequencyTest.totalTones} tones heard`}
+              </span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-black/10">
+              <span className="text-slate-600">Screening Threshold:</span>
+              <span className="text-emerald-700">
+                {report.testedEar === 'right' ? 'N/A' : (report.frequencyTest.detectionPercentage >= 80 ? '15–20 dB HL (Normal Screening Est.)' : 'Elevated (>30 dB HL)')}
+              </span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-slate-600">Contralateral Masking:</span>
+              <span className="text-slate-900">Right Ear Pink Noise Masked</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Ear Performance Card */}
+        <div className="bg-amber-50/80 rounded-2xl p-5 border-2 border-black shadow-brutal">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <div className="w-3.5 h-3.5 bg-amber-500 rounded-full border border-black" />
+              <h4 className="font-black uppercase text-amber-950 text-sm">
+                Right Ear Performance (Red [O])
+              </h4>
+            </div>
+            <span className="text-xs font-mono font-black px-2.5 py-0.5 bg-amber-200 border border-black rounded text-black">
+              {report.testedEar === 'left' ? 'NOT EVALUATED' : `${report.rightEarResult?.frequencyDetectionPercentage ?? report.frequencyTest.detectionPercentage}%`}
+            </span>
+          </div>
+
+          <div className="space-y-2 text-xs font-bold text-slate-800">
+            <div className="flex justify-between py-1 border-b border-black/10">
+              <span className="text-slate-600">Frequencies Evaluated:</span>
+              <span>250 Hz – 12,000 Hz</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-black/10">
+              <span className="text-slate-600">Pure Tone Detection:</span>
+              <span>
+                {report.testedEar === 'left' ? 'N/A' : `${report.rightEarResult?.detectedTones ?? report.frequencyTest.detectedTones} of ${report.rightEarResult?.totalTones ?? report.frequencyTest.totalTones} heard`}
+              </span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-black/10">
+              <span className="text-slate-600">Screening Threshold:</span>
+              <span className="text-emerald-700">
+                {report.testedEar === 'left' ? 'N/A' : (report.frequencyTest.detectionPercentage >= 80 ? '15–20 dB HL (Normal Screening Est.)' : 'Elevated (>30 dB HL)')}
+              </span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-slate-600">Contralateral Masking:</span>
+              <span className="text-slate-900">Left Ear Pink Noise Masked</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Individual Sequential Test Score Cards */}

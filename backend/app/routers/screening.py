@@ -114,8 +114,16 @@ def submit_screening(payload: CompleteScreeningSubmission):
         missed_freq_count=freq.missed_tones
     )
 
+    tested_ear = payload.tested_ear or payload.frequency_test.tested_ear or "both"
+    left_ear = payload.left_ear_result or payload.frequency_test.left_ear_result
+    right_ear = payload.right_ear_result or payload.frequency_test.right_ear_result
+
     screening_record = {
         "user_id": user["id"],
+        "tested_ear": tested_ear,
+        "left_ear_result": left_ear.dict() if left_ear else None,
+        "right_ear_result": right_ear.dict() if right_ear else None,
+        "test_id": payload.test_id,
         "repetition_test": rep.dict(),
         "misheard_test": mis.dict(),
         "frequency_test": freq.dict(),
@@ -126,14 +134,19 @@ def submit_screening(payload: CompleteScreeningSubmission):
     }
 
     screening_id = db.save_screening(screening_record)
+    generated_test_id = payload.test_id or f"TW-{screening_id[:8].upper()}"
 
     return ScreeningReport(
         id=screening_id,
+        test_id=generated_test_id,
         user_id=user["id"],
         user_name=user["full_name"],
         age=user["age"],
         preferred_language=user["preferred_language"],
         timestamp=datetime.utcnow().isoformat(),
+        tested_ear=tested_ear,
+        left_ear_result=left_ear,
+        right_ear_result=right_ear,
         repetition_test=rep,
         misheard_test=mis,
         frequency_test=freq,

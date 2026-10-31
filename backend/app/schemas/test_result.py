@@ -39,6 +39,18 @@ class FrequencyToneResponse(BaseModel):
     frequency_hz: int
     category: str  # low, mid, high
     heard: bool
+    ear: Optional[str] = "both"
+    estimated_db_hl: Optional[float] = None
+
+class EarScreeningSchema(BaseModel):
+    ear: str
+    frequency_detection_percentage: float
+    detected_tones: int
+    missed_tones: int
+    total_tones: int
+    hearing_status: Optional[str] = None
+    average_estimated_db_hl: Optional[float] = None
+    frequencies_tested: Optional[List[int]] = None
 
 class FrequencyTestResult(BaseModel):
     total_tones: int
@@ -47,20 +59,31 @@ class FrequencyTestResult(BaseModel):
     detection_percentage: float
     responses: List[FrequencyToneResponse]
     category_summary: Dict[str, Dict[str, Any]]
+    tested_ear: Optional[str] = "both"
+    left_ear_result: Optional[EarScreeningSchema] = None
+    right_ear_result: Optional[EarScreeningSchema] = None
 
 class CompleteScreeningSubmission(BaseModel):
     user_id: str
     repetition_test: RepetitionTestResult
     misheard_test: MisheardTestResult
     frequency_test: FrequencyTestResult
+    test_id: Optional[str] = None
+    tested_ear: Optional[str] = "both"
+    left_ear_result: Optional[EarScreeningSchema] = None
+    right_ear_result: Optional[EarScreeningSchema] = None
 
 class ScreeningReport(BaseModel):
     id: str
+    test_id: Optional[str] = None
     user_id: str
     user_name: str
     age: int
     preferred_language: str
     timestamp: str
+    tested_ear: Optional[str] = "both"
+    left_ear_result: Optional[EarScreeningSchema] = None
+    right_ear_result: Optional[EarScreeningSchema] = None
     repetition_test: RepetitionTestResult
     misheard_test: MisheardTestResult
     frequency_test: FrequencyTestResult

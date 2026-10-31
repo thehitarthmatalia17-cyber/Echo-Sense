@@ -28,12 +28,14 @@ interface TestMisheardPageProps {
   currentLanguage: LanguageCode;
   onComplete: (summary: MisheardTestSummary) => void;
   onExitRequest: () => void;
+  activeEar?: 'left' | 'right' | 'both';
 }
 
 export const TestMisheardPage: React.FC<TestMisheardPageProps> = ({
   currentLanguage,
   onComplete,
   onExitRequest,
+  activeEar = 'both',
 }) => {
   const t = translations[currentLanguage] || translations.en;
 
@@ -354,6 +356,25 @@ export const TestMisheardPage: React.FC<TestMisheardPageProps> = ({
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+
+        {/* Active Ear Identification Banner */}
+        <div className={`p-2.5 rounded-xl border-2 border-black flex items-center justify-between shadow-brutal-xs ${
+          activeEar === 'left' ? 'bg-sky-100 text-sky-950' :
+          activeEar === 'right' ? 'bg-amber-100 text-amber-950' :
+          'bg-purple-100 text-purple-950'
+        }`}>
+          <div className="flex items-center space-x-2">
+            <Ear className="w-4 h-4 stroke-[2.5]" />
+            <span className="text-xs font-black uppercase tracking-wider">
+              {activeEar === 'left' ? '🎧 ACTIVE: LEFT EAR TEST (RIGHT EAR MASKED)' :
+               activeEar === 'right' ? '🎧 ACTIVE: RIGHT EAR TEST (LEFT EAR MASKED)' :
+               '🎧 BILATERAL TEST (BOTH EARS ACTIVE)'}
+            </span>
+          </div>
+          <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-black text-white rounded border border-black">
+            {activeEar === 'both' ? 'STEREO' : 'ISOLATED'}
+          </span>
         </div>
 
         {/* Title and Phonemic Contrast */}

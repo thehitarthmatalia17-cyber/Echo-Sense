@@ -29,12 +29,14 @@ interface TestFrequencyPageProps {
   currentLanguage: LanguageCode;
   onComplete: (summary: FrequencyTestSummary) => void;
   onExitRequest: () => void;
+  activeEar?: 'left' | 'right' | 'both';
 }
 
 export const TestFrequencyPage: React.FC<TestFrequencyPageProps> = ({
   currentLanguage,
   onComplete,
   onExitRequest,
+  activeEar = 'both',
 }) => {
   const t = translations[currentLanguage] || translations.en;
 
@@ -76,7 +78,7 @@ export const TestFrequencyPage: React.FC<TestFrequencyPageProps> = ({
     if (isPlayingTone || !currentTone) return;
     setIsPlayingTone(true);
     try {
-      await audioService.playPureTone(currentTone.frequencyHz, currentTone.durationMs, 0.22);
+      await audioService.playPureTone(currentTone.frequencyHz, currentTone.durationMs, 0.22, activeEar, true);
     } catch (err) {
       console.warn("Tone generation error:", err);
     } finally {
@@ -91,6 +93,8 @@ export const TestFrequencyPage: React.FC<TestFrequencyPageProps> = ({
       frequencyHz: currentTone.frequencyHz,
       category: currentTone.category,
       heard,
+      ear: activeEar,
+      estimatedDbHl: heard ? 15 : 60,
     };
 
     const nextResponses = [...responses, responseItem];
@@ -115,6 +119,7 @@ export const TestFrequencyPage: React.FC<TestFrequencyPageProps> = ({
       missedTones,
       detectionPercentage,
       responses,
+      testedEar: activeEar,
       categorySummary: {
         low: {
           detected: responses.filter(r => r.category === 'low' && r.heard).length,
@@ -172,6 +177,30 @@ export const TestFrequencyPage: React.FC<TestFrequencyPageProps> = ({
           </p>
 
           <div className="my-6 space-y-3 text-left">
+            {/* Ear Testing Indicator */}
+            <div className={`p-3.5 rounded-xl border-2 border-black shadow-brutal-xs flex items-center justify-between ${
+              activeEar === 'left' ? 'bg-sky-100 text-sky-950' :
+              activeEar === 'right' ? 'bg-amber-100 text-amber-950' :
+              'bg-purple-100 text-purple-950'
+            }`}>
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1.5 bg-black text-white border border-black rounded-lg">
+                  <Headphones className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider">Active Ear Under Test</p>
+                  <p className="text-xs font-black uppercase">
+                    {activeEar === 'left' ? '🎧 LEFT EAR ONLY (Right Ear Masked)' :
+                     activeEar === 'right' ? '🎧 RIGHT EAR ONLY (Left Ear Masked)' :
+                     '🎧 BILATERAL (Both Ears Active)'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-black text-white rounded border border-black">
+                {activeEar.toUpperCase()}
+              </span>
+            </div>
+
             <div className="p-3.5 rounded-xl bg-[#FAF9F6] border-2 border-black shadow-brutal-xs flex items-start space-x-3">
               <div className="p-1.5 bg-[#FFC700] border border-black rounded-lg text-black shrink-0 mt-0.5">
                 <Headphones className="w-4 h-4 stroke-[2.5]" />
@@ -337,6 +366,25 @@ export const TestFrequencyPage: React.FC<TestFrequencyPageProps> = ({
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+
+        {/* Active Ear Identification Banner */}
+        <div className={`p-2.5 rounded-xl border-2 border-black flex items-center justify-between shadow-brutal-xs ${
+          activeEar === 'left' ? 'bg-sky-100 text-sky-950' :
+          activeEar === 'right' ? 'bg-amber-100 text-amber-950' :
+          'bg-purple-100 text-purple-950'
+        }`}>
+          <div className="flex items-center space-x-2">
+            <Headphones className="w-4 h-4 stroke-[2.5]" />
+            <span className="text-xs font-black uppercase tracking-wider">
+              {activeEar === 'left' ? '🎧 ACTIVE: LEFT EAR TEST (RIGHT EAR MASKED)' :
+               activeEar === 'right' ? '🎧 ACTIVE: RIGHT EAR TEST (LEFT EAR MASKED)' :
+               '🎧 BILATERAL TEST (BOTH EARS ACTIVE)'}
+            </span>
+          </div>
+          <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-black text-white rounded border border-black">
+            {activeEar === 'both' ? 'STEREO' : 'ISOLATED'}
+          </span>
         </div>
 
         {/* Title and Register Band */}

@@ -1,5 +1,7 @@
 export type LanguageCode = 'en' | 'hi' | 'kn' | 'gu' | 'ta' | 'te' | 'bn' | 'mr' | 'es' | 'fr';
 
+export type EarMode = 'left' | 'right' | 'both';
+
 export interface UserProfile {
   id?: string;
   fullName: string;
@@ -78,6 +80,8 @@ export interface ToneResponse {
   frequencyHz: number;
   category: 'low' | 'mid' | 'high';
   heard: boolean;
+  ear?: 'left' | 'right' | 'both';
+  estimatedDbHl?: number;
 }
 
 export interface FrequencyTestSummary {
@@ -87,15 +91,32 @@ export interface FrequencyTestSummary {
   detectionPercentage: number;
   responses: ToneResponse[];
   categorySummary: Record<string, { detected: number; missed: number; total: number; rangeHz: string }>;
+  testedEar?: EarMode;
+}
+
+export interface EarScreeningResult {
+  ear: 'left' | 'right';
+  frequencyDetectionPercentage: number;
+  detectedTones: number;
+  missedTones: number;
+  totalTones: number;
+  responses: ToneResponse[];
+  hearingStatus: string; // e.g. "Normal Sensitivity (Screening)", "Mild Elevation Indicator"
+  averageEstimatedDbHl: number; // Informational screening threshold estimate
+  frequenciesTested: number[];
 }
 
 export interface ScreeningReportData {
   id?: string;
+  testId?: string; // e.g. "TW-20261031-8F42"
   userId: string;
   userName: string;
   age: number;
   preferredLanguage: LanguageCode;
   timestamp: string;
+  testedEar?: EarMode;
+  leftEarResult?: EarScreeningResult;
+  rightEarResult?: EarScreeningResult;
   repetitionTest: RepetitionTestSummary;
   misheardTest: MisheardTestSummary;
   frequencyTest: FrequencyTestSummary;
